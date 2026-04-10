@@ -1,0 +1,12 @@
+{
+  "name": "Skyrim Special Edition",
+  "steam_app_id": "489830",
+  "engine": "bethesda",
+  "game_exe": "SkyrimSE.exe",
+  "install_subdir": "Skyrim Special Edition",
+  "script_extender": {
+    "name": "SKSE",
+    "loader_exe": "skse64_loader.exe",
+    "plugins_dir": "Data/SKSE/Plugins"
+  }
+}
