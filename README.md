@@ -44,6 +44,19 @@ fill that gap with a proper native tool.
 
 ---
 
+## Usage — GUI
+
+```bash
+python3 modlauncher-gui.py
+```
+
+Select your game from the dropdown. The load order panel appears automatically
+for games that support it (Bethesda games). Use **+ Install** to open a file
+chooser — you can select multiple archives at once and they will be installed
+sequentially.
+
+---
+
 ## Installation
 
 ```bash
