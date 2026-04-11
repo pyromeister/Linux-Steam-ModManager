@@ -19,13 +19,14 @@ ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "engines"))
 
-from config import load_profile, GAMES_DIR
+from config import load_profile, GAMES_DIR, get_steam_root, get_steam_candidates, save_steam_root
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def load_engine(game: str):
     profile = load_profile(game)
+    profile["slug"] = game
     if profile["engine"] == "bethesda":
         from bethesda import BethesdaEngine
         return BethesdaEngine(profile)
@@ -48,6 +49,8 @@ class ModRow(Adw.ActionRow):
         super().__init__()
         self.mod_name = mod["name"]
         self.set_title(mod["name"])
+        if mod.get("kind") == "se_plugin":
+            self.set_subtitle("SE Plugin")
 
         check = Gtk.CheckButton()
         check.set_active(mod["active"])
@@ -85,7 +88,7 @@ class ModManagerWindow(Adw.ApplicationWindow):
         self._installing = False
 
         self._build_ui()
-        self._select_game(0)
+        GLib.idle_add(self._init_steam_path)
 
     def _build_ui(self):
         # Toast overlay wraps everything
@@ -103,7 +106,7 @@ class ModManagerWindow(Adw.ApplicationWindow):
         # Game dropdown
         game_names = [name for _, name in self.games]
         self.game_dropdown = Gtk.DropDown.new_from_strings(game_names)
-        self.game_dropdown.connect("notify::selected", self._on_game_changed)
+        self._game_changed_handler = self.game_dropdown.connect("notify::selected", self._on_game_changed)
         header.set_title_widget(self.game_dropdown)
 
         # Header buttons
@@ -114,6 +117,12 @@ class ModManagerWindow(Adw.ApplicationWindow):
         setup_btn = Gtk.Button(label="Setup SE")
         setup_btn.connect("clicked", self._on_setup_se)
         header.pack_end(setup_btn)
+
+        help_btn = Gtk.Button()
+        help_btn.set_icon_name("help-about-symbolic")
+        help_btn.set_tooltip_text("Help")
+        help_btn.connect("clicked", self._on_help)
+        header.pack_start(help_btn)
 
         # Content: horizontal split
         self.content_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
@@ -244,6 +253,132 @@ class ModManagerWindow(Adw.ApplicationWindow):
     def _on_game_changed(self, dropdown, _param):
         self._select_game(dropdown.get_selected())
 
+    def _show_game_picker(self):
+        if not self.games:
+            self._toast("No game profiles found in games/")
+            return
+
+        dialog = Adw.MessageDialog(
+            transient_for=self,
+            heading="Select a Game",
+            body="Which game do you want to manage?",
+        )
+        for slug, name in self.games:
+            dialog.add_response(slug, name)
+        dialog.connect("response", self._on_game_picker_response)
+        dialog.present()
+
+    def _on_game_picker_response(self, dialog, response_id: str):
+        for idx, (slug, _name) in enumerate(self.games):
+            if slug == response_id:
+                # Block notify signal to avoid double-load when syncing dropdown
+                self.game_dropdown.handler_block(self._game_changed_handler)
+                self.game_dropdown.set_selected(idx)
+                self.game_dropdown.handler_unblock(self._game_changed_handler)
+                self._select_game(idx)
+                break
+
+    # ── Steam path setup ──────────────────────────────────────────────────────
+
+    def _init_steam_path(self):
+        if get_steam_root() is None:
+            self._show_steam_path_dialog(get_steam_candidates())
+        else:
+            self._show_game_picker()
+
+    def _show_steam_path_dialog(self, candidates: list):
+        self._steam_candidates = candidates  # stored for index-based response lookup
+
+        if not candidates:
+            body = (
+                "Steam was not found automatically.\n"
+                "Please select your Steam data folder manually.\n\n"
+                "Typical location: <tt>~/.local/share/Steam</tt>"
+            )
+        else:
+            lines = "\n".join(
+                f"{i+1}. <tt>{p}</tt>  ({self._steam_path_label(p)})"
+                for i, p in enumerate(candidates)
+            )
+            body = (
+                f"Multiple Steam installations were detected:\n\n{lines}\n\n"
+                "Select one below, or browse to a custom location."
+            )
+
+        dialog = Adw.MessageDialog(transient_for=self, heading="Steam Installation")
+        dialog.set_body(body)
+        dialog.set_body_use_markup(True)
+
+        for i in range(len(candidates)):
+            dialog.add_response(str(i), str(i + 1))
+
+        dialog.add_response("browse", "Browse…")
+        dialog.connect("response", self._on_steam_path_response)
+        dialog.present()
+
+    @staticmethod
+    def _steam_path_label(path) -> str:
+        s = str(path)
+        if ".var/app/" in s:      # Flatpak path pattern
+            return "Flatpak"
+        if "/snap/" in s:         # Snap path pattern
+            return "Snap"
+        return "Native"
+
+    def _apply_steam_path(self, chosen: Path):
+        if (chosen / "steamapps").exists():
+            save_steam_root(chosen)
+            self._show_game_picker()
+        else:
+            self._toast("That folder is not a valid Steam installation (no steamapps/ found)")
+            self._show_steam_path_dialog(get_steam_candidates())
+
+    def _on_steam_path_response(self, dialog, response_id: str):
+        if response_id == "browse":
+            folder_dialog = Gtk.FileDialog()
+            folder_dialog.set_title("Select Steam data folder")
+            folder_dialog.select_folder(self, None, self._on_steam_folder_selected)
+            return
+
+        self._apply_steam_path(self._steam_candidates[int(response_id)])
+
+    def _on_steam_folder_selected(self, dialog, result):
+        try:
+            folder = dialog.select_folder_finish(result)
+        except Exception:
+            return
+        if folder is not None:
+            self._apply_steam_path(Path(folder.get_path()))
+
+    def _on_help(self, _btn):
+        dialog = Adw.MessageDialog(
+            transient_for=self,
+            heading="How to use the Mod Manager",
+            body=(
+                "<b>Installed Mods panel (left)</b>\n"
+                "Shows all mods tracked by the manager. "
+                "Check/uncheck a mod to enable or disable it (toggles its plugin in the load order).\n\n"
+                "<b>Load Order panel (right)</b>\n"
+                "Lists all active plugins in the order the game loads them. "
+                "Drag rows to reorder. Click <b>Save Order</b> to write the new order — "
+                "you must save or your changes will be lost on close.\n\n"
+                "<b>+ Install</b>\n"
+                "Opens a file picker. Select one or more .zip / .7z / .rar archives. "
+                "Each archive is extracted and its files are placed in the correct Data/ folder automatically.\n\n"
+                "<b>Setup SE</b>\n"
+                "Creates a launch script for the Script Extender (SFSE/SKSE/F4SE). "
+                "After clicking, copy the displayed text into Steam → game Properties → Launch Options.\n\n"
+                "<b>Check</b>\n"
+                "Verifies that the game folder and Script Extender files exist at the expected paths.\n\n"
+                "<b>SE Plugin</b> tag in mod list\n"
+                "Mods shown with this tag are DLL plugins found in the SE plugins folder. "
+                "They were not installed through this manager — remove them manually if needed."
+            ),
+        )
+        dialog.set_body_use_markup(True)
+        dialog.add_response("ok", "Got it")
+        dialog.present()
+
     def _update_load_order_panel(self):
         if self.engine.has_load_order:
             if self.load_order_panel.get_parent() is None:
@@ -258,7 +393,12 @@ class ModManagerWindow(Adw.ApplicationWindow):
         while child := self.mods_list.get_first_child():
             self.mods_list.remove(child)
 
-        mods = self.engine.list_mods()
+        try:
+            mods = self.engine.list_mods()
+        except Exception as e:
+            self._toast(f"Could not load mod list: {e}")
+            self.mods_list.append(self.empty_label)
+            return
 
         if not mods:
             self.mods_list.append(self.empty_label)
@@ -279,6 +419,9 @@ class ModManagerWindow(Adw.ApplicationWindow):
     # ── Install ───────────────────────────────────────────────────────────────
 
     def _on_install(self, _btn):
+        if not self.engine:
+            self._toast("Select a game first")
+            return
         dialog = Gtk.FileDialog()
         dialog.set_title("Select mod archives")
 
@@ -332,6 +475,9 @@ class ModManagerWindow(Adw.ApplicationWindow):
     # ── Uninstall ─────────────────────────────────────────────────────────────
 
     def _on_uninstall(self, _btn):
+        if not self.engine:
+            self._toast("Select a game first")
+            return
         row = self.mods_list.get_selected_row()
         if not row or not isinstance(row, ModRow):
             self._toast("Select a mod to uninstall")
@@ -382,6 +528,9 @@ class ModManagerWindow(Adw.ApplicationWindow):
     # ── Header actions ────────────────────────────────────────────────────────
 
     def _on_check(self, _btn):
+        if not self.engine:
+            self._toast("Select a game first")
+            return
         warnings = self.engine.paths.verify()
         if warnings:
             self._toast(f"⚠ {warnings[0]}" + (f" (+{len(warnings)-1} more)" if len(warnings) > 1 else ""))
@@ -389,14 +538,38 @@ class ModManagerWindow(Adw.ApplicationWindow):
             self._toast("✓ All paths verified")
 
     def _on_setup_se(self, _btn):
-        if not self.engine.has_script_extender:
+        if not self.engine or not self.engine.has_script_extender:
             self._toast("No script extender for this game")
             return
         try:
-            self.engine.setup_script_extender()
-            self._toast("Launch script created — check terminal for Steam launch option")
+            script_path = self.engine.setup_script_extender()
         except Exception as e:
             self._toast(f"Setup failed: {e}")
+            return
+
+        launch_option = f'"{script_path}" %command%'
+
+        copied = False
+        try:
+            self.get_display().get_clipboard().set(launch_option)
+            copied = True
+        except Exception:
+            pass
+
+        clipboard_note = "\nThe text has been copied to your clipboard." if copied else ""
+        dialog = Adw.MessageDialog(
+            transient_for=self,
+            heading="Script Extender Setup Complete",
+            body=(
+                "A launch script was created. Add the following to your game's "
+                "<b>Steam Launch Options</b> (right-click game → Properties → General):\n\n"
+                f"<tt>{GLib.markup_escape_text(launch_option)}</tt>"
+                f"{clipboard_note}"
+            ),
+        )
+        dialog.set_body_use_markup(True)
+        dialog.add_response("ok", "OK")
+        dialog.present()
 
     # ── Utilities ─────────────────────────────────────────────────────────────
 

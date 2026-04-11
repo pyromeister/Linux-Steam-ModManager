@@ -4,11 +4,102 @@ No hardcoded game paths. All paths derived from Steam layout + profile.
 """
 
 import json
+import re
 import sys
 from pathlib import Path
 
-STEAM_ROOT = Path.home() / ".local/share/Steam"
 GAMES_DIR = Path(__file__).parent.parent / "games"
+APP_CONFIG_PATH = Path.home() / ".config/linux-mod-manager/config.json"
+
+# Known Steam data dir locations, checked in order of preference
+_STEAM_CANDIDATES = [
+    Path.home() / ".local/share/Steam",                            # native / .deb / .rpm
+    Path.home() / ".var/app/com.valvesoftware.Steam/data/Steam",  # Flatpak
+    Path.home() / "snap/steam/common/.local/share/Steam",         # Snap
+]
+
+
+# ── App config (persists user choices across sessions) ────────────────────────
+
+def _load_app_config() -> dict:
+    if APP_CONFIG_PATH.exists():
+        try:
+            return json.loads(APP_CONFIG_PATH.read_text())
+        except Exception:
+            return {}
+    return {}
+
+
+def _save_app_config(data: dict) -> None:
+    APP_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    APP_CONFIG_PATH.write_text(json.dumps(data, indent=2))
+
+
+def save_steam_root(path: Path) -> None:
+    """Persist the user-chosen Steam root to app config."""
+    config = _load_app_config()
+    config["steam_root"] = str(path)
+    _save_app_config(config)
+
+
+# ── Steam root detection ──────────────────────────────────────────────────────
+
+def get_steam_candidates() -> list[Path]:
+    """All auto-detectable Steam data directories present on this system."""
+    return [c for c in _STEAM_CANDIDATES if (c / "steamapps").exists()]
+
+
+def get_steam_root() -> Path | None:
+    """
+    Return the Steam data directory to use, or None if ambiguous / not found.
+
+    Priority:
+      1. Saved config  (validated: steamapps must still exist)
+      2. Auto-detected (only when exactly one candidate is found)
+      3. None          (0 or 2+ candidates, no saved config) → caller must prompt
+    """
+    config = _load_app_config()
+    if "steam_root" in config:
+        saved = Path(config["steam_root"])
+        if (saved / "steamapps").exists():
+            return saved
+        # Saved path no longer valid — drop it and re-detect
+        del config["steam_root"]
+        _save_app_config(config)
+
+    candidates = get_steam_candidates()
+    if len(candidates) == 1:
+        return candidates[0]
+    return None  # 0 or multiple — GUI must ask the user
+
+
+def _parse_library_paths(vdf_path: Path) -> list[Path]:
+    """Extract all 'path' values from libraryfolders.vdf (regex, no full VDF parser needed)."""
+    if not vdf_path.exists():
+        return []
+    content = vdf_path.read_text(encoding="utf-8")
+    return [Path(p) for p in re.findall(r'"path"\s+"([^"]+)"', content)]
+
+
+def find_library_for_app(app_id: str | int) -> Path | None:
+    """
+    Return the Steam library folder that contains the given app ID,
+    detected via appmanifest_{app_id}.acf presence.
+    Searches all libraries listed in libraryfolders.vdf.
+    Falls back to the Steam root itself if no manifest found.
+    """
+    steam_root = get_steam_root()
+    if steam_root is None:
+        return None
+
+    vdf = steam_root / "steamapps/libraryfolders.vdf"
+    libraries = _parse_library_paths(vdf) or [steam_root]
+
+    for lib in libraries:
+        if (lib / f"steamapps/appmanifest_{app_id}.acf").exists():
+            return lib
+
+    return steam_root  # game not found in any library — fall back to root
 
 
 def load_profile(game: str) -> dict:
@@ -30,9 +121,10 @@ class GamePaths:
         app_id = profile["steam_app_id"]
         subdir = profile["install_subdir"]
 
-        self.game_root = STEAM_ROOT / "steamapps/common" / subdir
+        steam_lib = find_library_for_app(app_id) or (Path.home() / ".local/share/Steam")
+        self.game_root = steam_lib / "steamapps/common" / subdir
         self.data_dir = self.game_root / "Data"
-        self.proton_prefix = STEAM_ROOT / f"steamapps/compatdata/{app_id}/pfx"
+        self.proton_prefix = steam_lib / f"steamapps/compatdata/{app_id}/pfx"
         self.drive_c = self.proton_prefix / "drive_c"
 
         # Script extender

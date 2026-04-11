@@ -14,6 +14,7 @@ from base import BaseEngine
 from config import GamePaths
 from plugins import PluginsFile
 from installer import (
+    DLL_EXTENSION,
     PLUGIN_EXTENSIONS,
     detect_and_install,
     extract,
@@ -59,7 +60,7 @@ class BethesdaEngine(BaseEngine):
                     plugins_added.append(dst.name)
             plugins_file.write()
 
-            record_install(name, archive_path, installed)
+            record_install(name, archive_path, installed, game_slug=self.profile.get("slug"))
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
@@ -88,19 +89,35 @@ class BethesdaEngine(BaseEngine):
     # ── List ─────────────────────────────────────────────────────────────────
 
     def list_mods(self) -> list[dict]:
+        game_slug = self.profile.get("slug")
         manifest = load_manifest()
         plugin_lookup = {p.name: p for p in PluginsFile.read(self.paths.plugins_txt).plugins}
         result = []
+        tracked_se_dlls: set[str] = set()
+
         for name, entry in manifest.items():
-            plugins = [
-                f for f in entry.get("files", [])
-                if Path(f).suffix.lower() in PLUGIN_EXTENSIONS
-            ]
+            entry_game = entry.get("game")
+            if entry_game is not None and entry_game != game_slug:
+                continue
+            files = entry.get("files", [])
+            plugins = []
+            for f in files:
+                ext = Path(f).suffix.lower()
+                if ext in PLUGIN_EXTENSIONS:
+                    plugins.append(f)
+                elif ext == DLL_EXTENSION:
+                    tracked_se_dlls.add(Path(f).name)
             active = all(
                 (p := plugin_lookup.get(Path(f).name)) and p.active
                 for f in plugins
             ) if plugins else True
-            result.append({"name": name, "active": active, "plugins": plugins})
+            result.append({"name": name, "active": active, "plugins": plugins, "kind": "mod"})
+
+        if self.paths.se_plugins_dir and self.paths.se_plugins_dir.exists():
+            for dll in sorted(self.paths.se_plugins_dir.glob(f"*{DLL_EXTENSION}")):
+                if dll.name not in tracked_se_dlls:
+                    result.append({"name": dll.stem, "active": True, "plugins": [], "kind": "se_plugin"})
+
         return result
 
     # ── Load order ───────────────────────────────────────────────────────────
@@ -154,6 +171,7 @@ class BethesdaEngine(BaseEngine):
         print(f"✓ Launch script created: {script_path}")
         print(f"\nAdd this to Steam launch options:")
         print(f'  "{script_path}" %command%')
+        return script_path
 
     # ── INI setup ────────────────────────────────────────────────────────────
 

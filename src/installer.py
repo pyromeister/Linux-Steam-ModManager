@@ -17,6 +17,8 @@ MANIFEST_PATH = Path(__file__).parent.parent / "installed_mods.json"
 
 # Extensions that need a Plugins.txt entry (Bethesda engine)
 PLUGIN_EXTENSIONS = {".esm", ".esp", ".esl"}
+# DLL extension — used for root-level installs and SE plugin directories
+DLL_EXTENSION = ".dll"
 
 
 # ── Archive extraction ────────────────────────────────────────────────────────
@@ -155,11 +157,12 @@ def save_manifest(manifest: dict) -> None:
     MANIFEST_PATH.write_text(json.dumps(manifest, indent=2))
 
 
-def record_install(mod_name: str, archive: Path, installed_files: list[Path]) -> None:
+def record_install(mod_name: str, archive: Path, installed_files: list[Path], game_slug: str | None = None) -> None:
     manifest = load_manifest()
     manifest[mod_name] = {
         "archive": str(archive),
         "files": [str(f) for f in installed_files],
+        "game": game_slug,
     }
     save_manifest(manifest)
 

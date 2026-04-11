@@ -24,6 +24,8 @@ class PluginsFile:
 
     @classmethod
     def read(cls, path: Path) -> "PluginsFile":
+        if not path.exists():
+            return cls(path=path, _lines=[])
         lines = []
         for raw in path.read_text(encoding="utf-8").splitlines():
             stripped = raw.strip()
