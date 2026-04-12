@@ -24,9 +24,12 @@ fill that gap with a proper native tool.
 
 - Install mods from `.zip`, `.7z`, and `.rar` archives
 - Automatically detects mod structure and copies files to the correct location
+- Handles standard `Data/`, double-nested `Data/Data/`, single-wrapper `ModName/Data/`, and bare-root layouts
 - Manages `Plugins.txt` load order for Bethesda games
 - Enable / disable individual mods
-- Reorder load order from the CLI
+- Reorder load order from the GUI
+- **Archive cache:** each mod archive is copied to `~/.local/share/linux-mod-manager/archives/{game}/` on install — the original can be moved or deleted without affecting the tracked state
+- **Backup before overwrite:** if a mod install would overwrite an existing file (vanilla or from another mod), the original is backed up to `~/.local/share/linux-mod-manager/backups/{game}/{mod}/` and restored automatically on uninstall
 - Tracks installed files for clean uninstall (no leftover files)
 - **Linux case-sensitivity fix:** normalizes directory names (`interface/` → `Interface/`, `sfse/plugins/` → `SFSE/Plugins/`) that Windows-packed mods get wrong
 - Script extender launch setup (SFSE, SKSE, F4SE) via Proton wrapper
@@ -37,9 +40,10 @@ fill that gap with a proper native tool.
 ## Requirements
 
 - Python 3.10+
-- `unzip` — for `.zip` archives
-- `p7zip` — for `.7z` archives (`sudo apt install p7zip-full`)
-- `unrar` — for `.rar` archives (`sudo apt install unrar`)
+- GTK 4 + libadwaita (for the GUI): `sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1`
+- `p7zip-full` — for `.7z` archives: `sudo apt install p7zip-full`
+- `unrar` — for `.rar` archives: `sudo apt install unrar`
+- `.zip` archives are handled by Python's standard library (no extra tool needed)
 - Steam with Proton (for Bethesda games)
 
 ---
@@ -64,11 +68,11 @@ git clone https://github.com/yourusername/linux-mod-manager
 cd linux-mod-manager
 ```
 
-No pip dependencies — standard library only.
+No pip dependencies — standard library only (GUI requires system GTK4 packages, see Requirements).
 
 ---
 
-## Usage
+## Usage — CLI
 
 ```bash
 # List installed mods and current load order
@@ -80,16 +84,15 @@ python3 modlauncher.py --game starfield install ~/Downloads/SomeMod.zip
 # Install with a custom name
 python3 modlauncher.py --game starfield install ~/Downloads/SomeMod.zip MyModName
 
-# Uninstall a mod (removes all tracked files)
+# Uninstall a mod (removes all tracked files, restores any backups)
 python3 modlauncher.py --game starfield uninstall MyModName
 
 # Enable / disable a mod
 python3 modlauncher.py --game starfield enable MyModName
 python3 modlauncher.py --game starfield disable MyModName
 
-# Show and reorder load order
+# Show load order
 python3 modlauncher.py --game starfield order
-python3 modlauncher.py --game starfield order MyMod.esm 2
 
 # Set up the script extender launch wrapper (run once)
 python3 modlauncher.py --game starfield setup-se
@@ -99,6 +102,26 @@ python3 modlauncher.py --game starfield check
 
 # List all supported games
 python3 modlauncher.py games
+```
+
+---
+
+## Managed directories
+
+The manager keeps its data under `~/.local/share/linux-mod-manager/`:
+
+```
+~/.local/share/linux-mod-manager/
+├── archives/
+│   └── starfield/          ← cached copy of every installed archive
+│       ├── SomeMod.zip
+│       └── AnotherMod.7z
+└── backups/
+    └── starfield/
+        └── SomeMod/        ← files overwritten by SomeMod, restored on uninstall
+            └── Data/
+                └── Interface/
+                    └── somefile.swf
 ```
 
 ---
@@ -120,6 +143,7 @@ python3 modlauncher.py games
 ```
 linux-mod-manager/
 ├── modlauncher.py       # CLI entry point
+├── modlauncher-gui.py   # GUI entry point (GTK4 + libadwaita)
 ├── engines/
 │   ├── base.py          # Abstract BaseEngine with capability flags
 │   └── bethesda.py      # Bethesda engine (Starfield, Skyrim, Fallout)
@@ -127,16 +151,18 @@ linux-mod-manager/
 │   ├── starfield.json   # Game profile
 │   └── skyrim_se.json
 └── src/
-    ├── config.py        # Path resolver from game profile
-    ├── installer.py     # Archive extraction, structure detection, manifest
-    └── plugins.py       # Plugins.txt read/write/reorder
+    ├── config.py        # Path resolver, Steam detection, managed dir constants
+    ├── installer.py     # Archive extraction, structure detection, manifest, cache, backups
+    ├── plugins.py       # Plugins.txt read/write/reorder
+    └── gui/
+        └── app.py       # GTK4 window, mod list, load order panel
 ```
 
 ### Adding a new game
 
 1. Create `games/yourgame.json` with the game's Steam App ID, install path, and script extender info
 2. If the game uses a different mod system, create `engines/yourgame.py` extending `BaseEngine`
-3. Register the engine name in `modlauncher.py`'s `load_engine()`
+3. Register the engine name in `modlauncher.py`'s `load_engine()` and in `src/gui/app.py`'s `load_engine()`
 
 ---
 

@@ -29,6 +29,7 @@ from config import load_profile, GAMES_DIR
 
 def load_engine(game: str):
     profile = load_profile(game)
+    profile["slug"] = game
     engine_name = profile["engine"]
 
     if engine_name == "bethesda":
