@@ -27,3 +27,6 @@ Thumbs.db
 
 # Internal context file (dev notes, not for end users)
 CONTEXT.md
+
+# Dev todo list
+TODO.md

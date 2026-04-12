@@ -44,6 +44,16 @@ def save_steam_root(path: Path) -> None:
     _save_app_config(config)
 
 
+def get_nexus_api_key() -> str | None:
+    return _load_app_config().get("nexus_api_key")
+
+
+def save_nexus_api_key(key: str) -> None:
+    config = _load_app_config()
+    config["nexus_api_key"] = key.strip()
+    _save_app_config(config)
+
+
 # ── Steam root detection ──────────────────────────────────────────────────────
 
 def get_steam_candidates() -> list[Path]:
