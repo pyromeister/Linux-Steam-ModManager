@@ -68,6 +68,18 @@ def detect_source_root(extracted: Path) -> tuple[Path, str, dict]:
             return content_root, "double", _top_names(content_root)
         return tops["data"], "data", inner
 
+    # Single wrapper directory containing Data/ (e.g. ModName/Data/plugin.esp)
+    if len(tops) == 1:
+        only = next(iter(tops.values()))
+        if only.is_dir():
+            inner = _top_names(only)
+            if "data" in inner:
+                sub_inner = _top_names(inner["data"])
+                if "data" in sub_inner:
+                    content_root = sub_inner["data"]
+                    return content_root, "double", _top_names(content_root)
+                return inner["data"], "data", sub_inner
+
     return extracted, "root", tops
 
 

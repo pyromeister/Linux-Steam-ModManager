@@ -12,7 +12,8 @@ from pathlib import Path
 import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gdk, GLib, Gtk
+gi.require_version("Pango", "1.0")
+from gi.repository import Adw, Gdk, GLib, Gtk, Pango
 
 # Bootstrap paths
 ROOT = Path(__file__).parent.parent.parent
@@ -44,35 +45,75 @@ def available_games() -> list[tuple[str, str]]:
 
 # ── Mod row widget ────────────────────────────────────────────────────────────
 
-class ModRow(Adw.ActionRow):
+class ModRow(Gtk.ListBoxRow):
     def __init__(self, mod: dict, on_toggle):
         super().__init__()
         self.mod_name = mod["name"]
-        self.set_title(mod["name"])
-        if mod.get("kind") == "se_plugin":
-            self.set_subtitle("SE Plugin")
+
+        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        box.set_margin_start(8)
+        box.set_margin_end(8)
+        box.set_margin_top(5)
+        box.set_margin_bottom(5)
+        self.set_child(box)
 
         check = Gtk.CheckButton()
         check.set_active(mod["active"])
+        check.set_valign(Gtk.Align.CENTER)
         check.connect("toggled", lambda btn: on_toggle(self.mod_name, btn.get_active()))
-        self.add_prefix(check)
+        box.append(check)
+
+        label_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        label_box.set_hexpand(True)
+        label_box.set_valign(Gtk.Align.CENTER)
+        box.append(label_box)
+
+        name_label = Gtk.Label(label=mod["name"])
+        name_label.set_xalign(0)
+        name_label.set_ellipsize(Pango.EllipsizeMode.END)
+        label_box.append(name_label)
+
+        if mod.get("kind") == "se_plugin":
+            sub = Gtk.Label(label="SE Plugin")
+            sub.set_xalign(0)
+            sub.add_css_class("dim-label")
+            sub.add_css_class("caption")
+            label_box.append(sub)
 
 
 # ── Load order row widget ─────────────────────────────────────────────────────
 
-class PluginRow(Adw.ActionRow):
+class PluginRow(Gtk.ListBoxRow):
     def __init__(self, name: str, index: int):
         super().__init__()
         self.plugin_name = name
-        self.set_title(name)
 
-        label = Gtk.Label(label=str(index + 1))
-        label.add_css_class("dim-label")
-        self.add_prefix(label)
+        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        box.set_margin_start(8)
+        box.set_margin_end(8)
+        box.set_margin_top(5)
+        box.set_margin_bottom(5)
+        self.set_child(box)
+
+        num = Gtk.Label(label=str(index + 1))
+        num.add_css_class("dim-label")
+        num.add_css_class("caption")
+        num.set_valign(Gtk.Align.CENTER)
+        num.set_size_request(24, -1)
+        num.set_xalign(1)
+        box.append(num)
+
+        label = Gtk.Label(label=name)
+        label.set_hexpand(True)
+        label.set_xalign(0)
+        label.set_ellipsize(Pango.EllipsizeMode.END)
+        label.set_valign(Gtk.Align.CENTER)
+        box.append(label)
 
         handle = Gtk.Image.new_from_icon_name("list-drag-handle-symbolic")
         handle.add_css_class("drag-handle")
-        self.add_suffix(handle)
+        handle.set_valign(Gtk.Align.CENTER)
+        box.append(handle)
 
 
 # ── Main window ───────────────────────────────────────────────────────────────
