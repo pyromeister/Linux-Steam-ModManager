@@ -16,6 +16,7 @@ from plugins import PluginsFile
 from installer import (
     DLL_EXTENSION,
     PLUGIN_EXTENSIONS,
+    cache_archive,
     detect_and_install,
     extract,
     load_manifest,
@@ -44,13 +45,16 @@ class BethesdaEngine(BaseEngine):
 
     def install(self, archive_path: Path, mod_name: str = None) -> None:
         name = mod_name or archive_path.stem
+        game_slug = self.profile.get("slug")
         tmp = Path(f"/tmp/linuxmm_{name}")
         try:
             print(f"Extracting {archive_path.name}...")
             extract(archive_path, tmp)
 
+            archive_cache = cache_archive(archive_path, game_slug)
+
             print("Installing files...")
-            installed = detect_and_install(tmp, self.paths.data_dir)
+            installed, backups = detect_and_install(tmp, self.paths.data_dir, game_slug, name)
 
             plugins_added = []
             plugins_file = PluginsFile.read(self.paths.plugins_txt)
@@ -60,7 +64,8 @@ class BethesdaEngine(BaseEngine):
                     plugins_added.append(dst.name)
             plugins_file.write()
 
-            record_install(name, archive_path, installed, game_slug=self.profile.get("slug"))
+            record_install(name, archive_path, installed, game_slug=game_slug,
+                           archive_cache=archive_cache, backups=backups)
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
@@ -71,19 +76,30 @@ class BethesdaEngine(BaseEngine):
     # ── Uninstall ────────────────────────────────────────────────────────────
 
     def uninstall(self, mod_name: str) -> None:
-        files = remove_from_manifest(mod_name)
-        if not files:
+        entry = remove_from_manifest(mod_name)
+        if not entry:
             print(f"Not installed: {mod_name}")
             return
 
+        backups = entry.get("backups", {})
         plugins_file = PluginsFile.read(self.paths.plugins_txt)
-        for f in files:
-            if f.exists():
-                f.unlink()
+
+        for f_str in entry.get("files", []):
+            f = Path(f_str)
+            bak_str = backups.get(f_str)
+            if bak_str:
+                bak = Path(bak_str)
+                if bak.exists():
+                    f.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(bak, f)
+                    bak.unlink()
+            else:
+                if f.exists():
+                    f.unlink()
             if f.suffix.lower() in PLUGIN_EXTENSIONS:
                 plugins_file.remove(f.name)
-        plugins_file.write()
 
+        plugins_file.write()
         print(f"✓ Uninstalled: {mod_name}")
 
     # ── List ─────────────────────────────────────────────────────────────────

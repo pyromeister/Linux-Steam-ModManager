@@ -2,6 +2,7 @@
 Generic archive extractor + file installer + manifest tracker.
 Handles zip/7z/rar. Normalizes directory casing on Linux.
 Tracks installed files in installed_mods.json for clean uninstall.
+Caches mod archives and backs up overwritten files for safe restore.
 """
 
 import json
@@ -11,7 +12,7 @@ import sys
 import zipfile
 from pathlib import Path
 
-from config import normalize_dir_name
+from config import normalize_dir_name, ARCHIVES_DIR, BACKUPS_DIR
 
 MANIFEST_PATH = Path(__file__).parent.parent / "installed_mods.json"
 
@@ -41,6 +42,22 @@ def extract(archive: Path, dest: Path) -> None:
         )
     else:
         raise ValueError(f"Unsupported archive format: {suffix}")
+
+
+# ── Archive cache ─────────────────────────────────────────────────────────────
+
+def cache_archive(archive: Path, game_slug: str) -> Path:
+    """
+    Copy archive to the managed archives directory.
+    Skips the copy if the destination already exists (same name).
+    Returns the cached archive path.
+    """
+    dest_dir = ARCHIVES_DIR / game_slug
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest = dest_dir / archive.name
+    if not dest.exists():
+        shutil.copy2(archive, dest)
+    return dest
 
 
 # ── Directory structure detection ────────────────────────────────────────────
@@ -102,29 +119,61 @@ def _normalized_dest(src_file: Path, src_root: Path, dest_root: Path) -> Path:
     return dest_root.joinpath(*normalized)
 
 
-def install_files(src_root: Path, dest_root: Path) -> list[Path]:
+def _backup_file(dst: Path, dest_root: Path, game_slug: str, mod_name: str) -> Path:
+    """
+    Back up an existing file before it is overwritten.
+    Stores in BACKUPS_DIR/game_slug/mod_name/<relative_to_dest_root>.
+    Returns the backup path.
+    """
+    rel = dst.relative_to(dest_root)
+    backup = BACKUPS_DIR / game_slug / mod_name / rel
+    backup.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(dst, backup)
+    return backup
+
+
+def install_files(
+    src_root: Path,
+    dest_root: Path,
+    game_slug: str | None = None,
+    mod_name: str | None = None,
+) -> tuple[list[Path], dict[str, str]]:
     """
     Copy all files from src_root into dest_root with case normalization.
-    Returns list of destination paths written.
+    If game_slug and mod_name are provided, backs up any file that would be
+    overwritten before copying.
+    Returns (installed_paths, backups) where backups maps dst → backup_path.
     """
     installed = []
+    backups: dict[str, str] = {}
     for src_file in src_root.rglob("*"):
         if not src_file.is_file():
             continue
         dst = _normalized_dest(src_file, src_root, dest_root)
         dst.parent.mkdir(parents=True, exist_ok=True)
+        if game_slug and mod_name and dst.exists():
+            bak = _backup_file(dst, dest_root, game_slug, mod_name)
+            backups[str(dst)] = str(bak)
         shutil.copy2(src_file, dst)
         installed.append(dst)
-    return installed
+    return installed, backups
 
 
-def detect_and_install(extracted: Path, data_dir: Path) -> list[Path]:
+def detect_and_install(
+    extracted: Path,
+    data_dir: Path,
+    game_slug: str | None = None,
+    mod_name: str | None = None,
+) -> tuple[list[Path], dict[str, str]]:
     """
     Detect mod layout, map to correct destination under data_dir, install.
+    Backs up overwritten files when game_slug and mod_name are given.
+    Returns (installed_paths, backups).
 
     Handles:
       - Data/ at root             → strip Data/, copy to data_dir/
       - Data/Data/ (double nest)  → strip both, copy to data_dir/
+      - ModName/Data/ (wrapper)   → strip wrapper + Data/, copy to data_dir/
       - SFSE/ at root             → copy to data_dir/SFSE/
       - Interface/ at root        → copy to data_dir/Interface/
       - *.esm/.esp/.esl at root   → copy to data_dir/
@@ -133,28 +182,31 @@ def detect_and_install(extracted: Path, data_dir: Path) -> list[Path]:
     content_root, layout, tops = detect_source_root(extracted)
 
     if layout in ("data", "double"):
-        # Standard: everything under content_root goes into data_dir/
-        return install_files(content_root, data_dir)
+        return install_files(content_root, data_dir, game_slug, mod_name)
 
     # Root-layout: handle each top-level entry
-    installed = []
+    installed: list[Path] = []
+    backups: dict[str, str] = {}
 
     for name_lower, src_path in tops.items():
-        # Known subdirectory → map to correct location under data_dir
         if src_path.is_dir():
             canonical = normalize_dir_name(src_path.name)
             dest = data_dir / canonical
-            installed.extend(install_files(src_path, dest))
+            f, b = install_files(src_path, dest, game_slug, mod_name)
+            installed.extend(f)
+            backups.update(b)
         elif src_path.is_file():
-            # Root-level files: only copy plugin files and known assets
             ext = src_path.suffix.lower()
             if ext in PLUGIN_EXTENSIONS or ext in {".dll", ".pdb"}:
                 dst = data_dir / src_path.name
+                if game_slug and mod_name and dst.exists():
+                    bak = _backup_file(dst, data_dir, game_slug, mod_name)
+                    backups[str(dst)] = str(bak)
                 shutil.copy2(src_path, dst)
                 installed.append(dst)
             # Skip: readme, docs, images, etc.
 
-    return installed
+    return installed, backups
 
 
 # ── Manifest ─────────────────────────────────────────────────────────────────
@@ -169,21 +221,30 @@ def save_manifest(manifest: dict) -> None:
     MANIFEST_PATH.write_text(json.dumps(manifest, indent=2))
 
 
-def record_install(mod_name: str, archive: Path, installed_files: list[Path], game_slug: str | None = None) -> None:
+def record_install(
+    mod_name: str,
+    archive: Path,
+    installed_files: list[Path],
+    game_slug: str | None = None,
+    archive_cache: Path | None = None,
+    backups: dict[str, str] | None = None,
+) -> None:
     manifest = load_manifest()
     manifest[mod_name] = {
         "archive": str(archive),
+        "archive_cache": str(archive_cache) if archive_cache else None,
         "files": [str(f) for f in installed_files],
         "game": game_slug,
+        "backups": backups or {},
     }
     save_manifest(manifest)
 
 
-def remove_from_manifest(mod_name: str) -> list[Path]:
-    """Remove mod from manifest. Returns list of files that were tracked."""
+def remove_from_manifest(mod_name: str) -> dict:
+    """Remove mod from manifest. Returns the removed entry dict (or {})."""
     manifest = load_manifest()
     entry = manifest.pop(mod_name, None)
     if entry:
         save_manifest(manifest)
-        return [Path(f) for f in entry.get("files", [])]
-    return []
+        return entry
+    return {}
