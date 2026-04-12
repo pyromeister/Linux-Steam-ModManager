@@ -4,7 +4,7 @@ A native Linux mod manager for Steam games with engine-plugin architecture.
 Supports Bethesda games (Starfield, Skyrim SE, Fallout 4) out of the box, with a
 plugin system designed to support other games (RimWorld, Witcher 3, etc.) in the future.
 
-> ⚠️ **Work in Progress — not yet usable.** Core architecture is in place but the project is in early development. Expect breaking changes, missing features, and bugs. Not recommended for actual use yet.
+> ⚠️ **Early Alpha.** Core features work (Starfield tested). Expect rough edges. Not recommended for large mod setups yet.
 
 > **Note:** This project was built with [Claude Code](https://claude.ai/code) by Anthropic.
 > The code was generated through an AI-assisted development session and is maintained by the repository owner.
@@ -23,11 +23,13 @@ fill that gap with a proper native tool.
 ## Features
 
 - Install mods from `.zip`, `.7z`, and `.rar` archives
+- **NXM URL import** *(experimental)* — paste an `nxm://` link from Nexus Mods for direct download + install (requires free Nexus API key)
+- **Mod profiles** — save and restore named loadouts (active mods + load order) per game
 - Automatically detects mod structure and copies files to the correct location
 - Handles standard `Data/`, double-nested `Data/Data/`, single-wrapper `ModName/Data/`, and bare-root layouts
 - Manages `Plugins.txt` load order for Bethesda games
 - Enable / disable individual mods
-- Reorder load order from the GUI
+- Reorder load order via drag & drop in the GUI
 - **Archive cache:** each mod archive is copied to `~/.local/share/linux-mod-manager/archives/{game}/` on install — the original can be moved or deleted without affecting the tracked state
 - **Backup before overwrite:** if a mod install would overwrite an existing file (vanilla or from another mod), the original is backed up to `~/.local/share/linux-mod-manager/backups/{game}/{mod}/` and restored automatically on uninstall
 - Tracks installed files for clean uninstall (no leftover files)
@@ -64,8 +66,8 @@ sequentially.
 ## Installation
 
 ```bash
-git clone https://github.com/yourusername/linux-mod-manager
-cd linux-mod-manager
+git clone https://github.com/pyromaster/linux-sfse-modlauncher
+cd linux-sfse-modlauncher
 ```
 
 No pip dependencies — standard library only (GUI requires system GTK4 packages, see Requirements).

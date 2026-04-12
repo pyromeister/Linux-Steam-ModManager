@@ -200,11 +200,22 @@ class ModManagerWindow(Adw.ApplicationWindow):
         help_btn.connect("clicked", self._on_help)
         header.pack_start(help_btn)
 
-        profiles_btn = Gtk.Button()
-        profiles_btn.set_icon_name("bookmark-new-symbolic")
-        profiles_btn.set_tooltip_text("Profiles")
-        profiles_btn.connect("clicked", self._on_profiles)
-        header.pack_start(profiles_btn)
+        self._profiles_popover_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        self._profiles_popover_box.set_margin_start(12)
+        self._profiles_popover_box.set_margin_end(12)
+        self._profiles_popover_box.set_margin_top(10)
+        self._profiles_popover_box.set_margin_bottom(10)
+        self._profiles_popover_box.set_size_request(220, -1)
+
+        profiles_popover = Gtk.Popover()
+        profiles_popover.set_child(self._profiles_popover_box)
+        profiles_popover.connect("show", self._rebuild_profiles_popover)
+
+        profiles_menu_btn = Gtk.MenuButton()
+        profiles_menu_btn.set_icon_name("open-menu-symbolic")
+        profiles_menu_btn.set_tooltip_text("Profiles")
+        profiles_menu_btn.set_popover(profiles_popover)
+        header.pack_start(profiles_menu_btn)
 
         # Content: horizontal split
         self.content_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
@@ -461,7 +472,12 @@ class ModManagerWindow(Adw.ApplicationWindow):
                 "Verifies that the game folder and Script Extender files exist at the expected paths.\n\n"
                 "<b>SE Plugin</b> tag in mod list\n"
                 "Mods shown with this tag are DLL plugins found in the SE plugins folder. "
-                "They were not installed through this manager — remove them manually if needed."
+                "They were not installed through this manager — remove them manually if needed.\n\n"
+                "<b>NXM URL</b> (experimental)\n"
+                'Click "NXM URL", paste an <tt>nxm://</tt> link from Nexus Mods. '
+                "Requires a free Nexus API key (nexusmods.com → Account → API Keys).\n\n"
+                '<a href="https://github.com/pyromaster/linux-sfse-modlauncher">'
+                "GitHub Repository</a>"
             ),
         )
         dialog.set_body_use_markup(True)
@@ -729,29 +745,27 @@ class ModManagerWindow(Adw.ApplicationWindow):
 
     # ── Profiles ──────────────────────────────────────────────────────────────
 
-    def _on_profiles(self, _btn):
+    def _rebuild_profiles_popover(self, popover):
+        """Rebuild popover content each time it opens."""
+        import profiles as prof
+
+        box = self._profiles_popover_box
+        while child := box.get_first_child():
+            box.remove(child)
+
         if not self.engine:
-            self._toast("Select a game first")
+            no_game = Gtk.Label(label="Select a game first")
+            no_game.add_css_class("dim-label")
+            box.append(no_game)
             return
 
-        import profiles as prof
         slug = self._game_slug
         all_profiles = prof.load_all(slug)
 
-        dialog = Adw.MessageDialog(
-            transient_for=self,
-            heading="Mod Profiles",
-            body="Save current state as a named profile, or load a saved one.",
-        )
-
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        box.set_margin_start(16)
-        box.set_margin_end(16)
-        box.set_margin_bottom(8)
-
-        # Save section
+        # ── Save section ──
         save_label = Gtk.Label(label="Save current as:")
         save_label.set_xalign(0)
+        save_label.add_css_class("caption")
         box.append(save_label)
 
         save_entry = Gtk.Entry()
@@ -760,48 +774,6 @@ class ModManagerWindow(Adw.ApplicationWindow):
 
         save_btn = Gtk.Button(label="Save Profile")
         save_btn.add_css_class("suggested-action")
-        box.append(save_btn)
-
-        # Load section
-        if all_profiles:
-            sep = Gtk.Separator()
-            sep.set_margin_top(4)
-            box.append(sep)
-
-            load_label = Gtk.Label(label="Load / Delete:")
-            load_label.set_xalign(0)
-            box.append(load_label)
-
-            profile_names = list(all_profiles.keys())
-            dropdown = Gtk.DropDown.new_from_strings(profile_names)
-            box.append(dropdown)
-
-            load_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-
-            load_btn = Gtk.Button(label="Load")
-            load_btn.set_hexpand(True)
-            load_row.append(load_btn)
-
-            del_btn = Gtk.Button(label="Delete")
-            del_btn.add_css_class("destructive-action")
-            del_btn.set_hexpand(True)
-            load_row.append(del_btn)
-
-            box.append(load_row)
-
-            def do_load(_btn):
-                name = profile_names[dropdown.get_selected()]
-                self._apply_profile(slug, name)
-                dialog.close()
-
-            def do_delete(_btn):
-                name = profile_names[dropdown.get_selected()]
-                prof.delete(slug, name)
-                self._toast(f"Deleted profile: {name}")
-                dialog.close()
-
-            load_btn.connect("clicked", do_load)
-            del_btn.connect("clicked", do_delete)
 
         def do_save(_btn):
             name = save_entry.get_text().strip()
@@ -811,13 +783,52 @@ class ModManagerWindow(Adw.ApplicationWindow):
             order = self.engine.get_load_order() if self.engine.has_load_order else []
             prof.save(slug, name, active, order)
             self._toast(f"Saved profile: {name}")
-            dialog.close()
+            popover.popdown()
 
         save_btn.connect("clicked", do_save)
+        box.append(save_btn)
 
-        dialog.set_extra_child(box)
-        dialog.add_response("close", "Close")
-        dialog.present()
+        # ── Load / Delete section ──
+        if all_profiles:
+            sep = Gtk.Separator()
+            sep.set_margin_top(4)
+            sep.set_margin_bottom(4)
+            box.append(sep)
+
+            load_label = Gtk.Label(label="Saved profiles:")
+            load_label.set_xalign(0)
+            load_label.add_css_class("caption")
+            box.append(load_label)
+
+            profile_names = list(all_profiles.keys())
+            dropdown = Gtk.DropDown.new_from_strings(profile_names)
+            box.append(dropdown)
+
+            btn_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+
+            load_btn = Gtk.Button(label="Load")
+            load_btn.set_hexpand(True)
+
+            del_btn = Gtk.Button(label="Delete")
+            del_btn.add_css_class("destructive-action")
+            del_btn.set_hexpand(True)
+
+            def do_load(_btn):
+                name = profile_names[dropdown.get_selected()]
+                popover.popdown()
+                self._apply_profile(slug, name)
+
+            def do_delete(_btn):
+                name = profile_names[dropdown.get_selected()]
+                prof.delete(slug, name)
+                self._toast(f"Deleted profile: {name}")
+                popover.popdown()
+
+            load_btn.connect("clicked", do_load)
+            del_btn.connect("clicked", do_delete)
+            btn_row.append(load_btn)
+            btn_row.append(del_btn)
+            box.append(btn_row)
 
     def _apply_profile(self, slug: str, name: str):
         import profiles as prof
@@ -911,6 +922,9 @@ class ModManagerApp(Adw.Application):
         self.connect("activate", self._on_activate)
 
     def _on_activate(self, app):
+        # Follow system dark/light preference via libadwaita instead of
+        # the deprecated GtkSettings:gtk-application-prefer-dark-theme.
+        Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.PREFER_DARK)
         win = ModManagerWindow(app)
         win.present()
 
