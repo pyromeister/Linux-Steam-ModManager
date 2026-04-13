@@ -22,6 +22,14 @@ PLUGIN_EXTENSIONS = {".esm", ".esp", ".esl"}
 DLL_EXTENSION = ".dll"
 
 
+class ConflictError(Exception):
+    """Raised when a mod install would overwrite files owned by another tracked mod."""
+    def __init__(self, conflicts: list[tuple[str, str]]):
+        # conflicts: [(relative_path, owning_mod_name), ...]
+        self.conflicts = conflicts
+        super().__init__(f"{len(conflicts)} file conflict(s)")
+
+
 # ── Archive extraction ────────────────────────────────────────────────────────
 
 def extract(archive: Path, dest: Path) -> None:
@@ -98,6 +106,64 @@ def detect_source_root(extracted: Path) -> tuple[Path, str, dict]:
                 return inner["data"], "data", sub_inner
 
     return extracted, "root", tops
+
+
+# ── Conflict detection ────────────────────────────────────────────────────────
+
+def check_conflicts(
+    extracted: Path,
+    data_dir: Path,
+    manifest: dict,
+    new_mod_name: str,
+) -> list[tuple[str, str]]:
+    """
+    Scan what a mod would install and find files already owned by other mods.
+    Returns [(relative_path_under_data_dir, owning_mod_name), ...].
+    Vanilla files (present on disk but not in any manifest) are NOT reported.
+    """
+    # Reverse index: absolute path string → owning mod name
+    file_to_mod: dict[str, str] = {}
+    for mod_name, entry in manifest.items():
+        if mod_name == new_mod_name:
+            continue  # reinstalling same mod is not a conflict
+        for f in entry.get("files", []):
+            file_to_mod[f] = mod_name
+
+    if not file_to_mod:
+        return []
+
+    content_root, layout, tops = detect_source_root(extracted)
+    conflicts: list[tuple[str, str]] = []
+
+    def _scan(src_root: Path, dst_root: Path) -> None:
+        for src_file in src_root.rglob("*"):
+            if not src_file.is_file():
+                continue
+            dst = _normalized_dest(src_file, src_root, dst_root)
+            owner = file_to_mod.get(str(dst))
+            if owner:
+                try:
+                    rel = str(dst.relative_to(data_dir))
+                except ValueError:
+                    rel = str(dst)
+                conflicts.append((rel, owner))
+
+    if layout in ("data", "double"):
+        _scan(content_root, data_dir)
+    else:
+        for _name_lower, src_path in tops.items():
+            if src_path.is_dir():
+                canonical = normalize_dir_name(src_path.name)
+                _scan(src_path, data_dir / canonical)
+            elif src_path.is_file():
+                ext = src_path.suffix.lower()
+                if ext in PLUGIN_EXTENSIONS or ext in {".dll", ".pdb"}:
+                    dst = data_dir / src_path.name
+                    owner = file_to_mod.get(str(dst))
+                    if owner:
+                        conflicts.append((src_path.name, owner))
+
+    return conflicts
 
 
 # ── File copy with case normalization ────────────────────────────────────────
@@ -228,15 +294,19 @@ def record_install(
     game_slug: str | None = None,
     archive_cache: Path | None = None,
     backups: dict[str, str] | None = None,
+    nexus_meta: dict | None = None,
 ) -> None:
     manifest = load_manifest()
-    manifest[mod_name] = {
+    entry: dict = {
         "archive": str(archive),
         "archive_cache": str(archive_cache) if archive_cache else None,
         "files": [str(f) for f in installed_files],
         "game": game_slug,
         "backups": backups or {},
     }
+    if nexus_meta:
+        entry["nexus"] = nexus_meta
+    manifest[mod_name] = entry
     save_manifest(manifest)
 
 

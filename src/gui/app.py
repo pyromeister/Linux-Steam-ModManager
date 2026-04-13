@@ -1,5 +1,5 @@
 """
-GTK4 + libadwaita GUI for Linux Mod Manager.
+GTK4 + libadwaita GUI for Linux Steam ModManager.
 Adaptive layout: load order panel only shown when engine.has_load_order is True.
 Install operations run in background thread to keep UI responsive.
 """
@@ -13,7 +13,7 @@ import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 gi.require_version("Pango", "1.0")
-from gi.repository import Adw, Gdk, GLib, GObject, Gtk, Pango
+from gi.repository import Adw, Gdk, GLib, GObject, Gtk, Gio, Pango
 
 # Bootstrap paths
 ROOT = Path(__file__).parent.parent.parent
@@ -26,16 +26,23 @@ from config import (
     get_nexus_api_key, save_nexus_api_key,
 )
 
+sys.path.insert(0, str(ROOT / "engines"))
+from installer import ConflictError
+
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def load_engine(game: str):
     profile = load_profile(game)
     profile["slug"] = game
-    if profile["engine"] == "bethesda":
+    engine_name = profile["engine"]
+    if engine_name == "bethesda":
         from bethesda import BethesdaEngine
         return BethesdaEngine(profile)
-    raise ValueError(f"Engine '{profile['engine']}' not yet implemented")
+    if engine_name == "bepinex":
+        from bepinex import BepInExEngine
+        return BepInExEngine(profile)
+    raise ValueError(f"Engine '{engine_name}' not yet implemented")
 
 
 def available_games() -> list[tuple[str, str]]:
@@ -77,8 +84,13 @@ class ModRow(Gtk.ListBoxRow):
         name_label.set_ellipsize(Pango.EllipsizeMode.END)
         label_box.append(name_label)
 
-        if mod.get("kind") == "se_plugin":
-            sub = Gtk.Label(label="SE Plugin")
+        kind = mod.get("kind")
+        if kind in ("se_plugin", "framework"):
+            if kind == "framework":
+                sub_text = "Framework (not tracked)" if mod.get("untracked") else "Framework"
+            else:
+                sub_text = "SE Plugin"
+            sub = Gtk.Label(label=sub_text)
             sub.set_xalign(0)
             sub.add_css_class("dim-label")
             sub.add_css_class("caption")
@@ -155,7 +167,7 @@ class PluginRow(Gtk.ListBoxRow):
 class ModManagerWindow(Adw.ApplicationWindow):
     def __init__(self, app):
         super().__init__(application=app)
-        self.set_title("Linux Mod Manager")
+        self.set_title("Linux Steam ModManager")
         self.set_default_size(900, 600)
 
         self.engine = None
@@ -164,6 +176,7 @@ class ModManagerWindow(Adw.ApplicationWindow):
         self._game_slug = None
 
         self._build_ui()
+        self._update_setup_btn()
         GLib.idle_add(self._init_steam_path)
 
     def _build_ui(self):
@@ -179,21 +192,16 @@ class ModManagerWindow(Adw.ApplicationWindow):
         header = Adw.HeaderBar()
         root.append(header)
 
-        # Game dropdown
-        game_names = [name for _, name in self.games]
-        self.game_dropdown = Gtk.DropDown.new_from_strings(game_names)
-        self._game_changed_handler = self.game_dropdown.connect("notify::selected", self._on_game_changed)
-        header.set_title_widget(self.game_dropdown)
-
-        # Header buttons
+        # Header buttons — right side
         check_btn = Gtk.Button(label="Check")
         check_btn.connect("clicked", self._on_check)
         header.pack_end(check_btn)
 
-        setup_btn = Gtk.Button(label="Setup SE")
-        setup_btn.connect("clicked", self._on_setup_se)
-        header.pack_end(setup_btn)
+        self.setup_btn = Gtk.Button(label="Setup SE")
+        self.setup_btn.connect("clicked", self._on_setup_btn)
+        header.pack_end(self.setup_btn)
 
+        # Header buttons — left side
         help_btn = Gtk.Button()
         help_btn.set_icon_name("help-about-symbolic")
         help_btn.set_tooltip_text("Help")
@@ -211,32 +219,226 @@ class ModManagerWindow(Adw.ApplicationWindow):
         profiles_popover.set_child(self._profiles_popover_box)
         profiles_popover.connect("show", self._rebuild_profiles_popover)
 
-        profiles_menu_btn = Gtk.MenuButton()
-        profiles_menu_btn.set_icon_name("open-menu-symbolic")
-        profiles_menu_btn.set_tooltip_text("Profiles")
+        profiles_menu_btn = Gtk.MenuButton(label="Profiles")
+        profiles_menu_btn.set_tooltip_text("Save and load mod profiles")
         profiles_menu_btn.set_popover(profiles_popover)
         header.pack_start(profiles_menu_btn)
 
-        # Content: horizontal split
+        # Content: three-column horizontal split
         self.content_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
         self.content_box.set_vexpand(True)
         root.append(self.content_box)
 
-        # Left panel — installed mods
+        # Column 1 — games
+        self.content_box.append(self._build_games_panel())
+        self.content_box.append(Gtk.Separator(orientation=Gtk.Orientation.VERTICAL))
+
+        # Column 2 — installed mods
         self.content_box.append(self._build_mods_panel())
 
-        # Right panel — load order (added dynamically based on engine)
+        # Column 3 — load order (added dynamically based on engine)
         self.load_order_panel = self._build_load_order_panel()
 
         # Status bar
+        status_bar = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+
         self.status_label = Gtk.Label(label="Ready")
         self.status_label.add_css_class("dim-label")
         self.status_label.set_margin_start(12)
         self.status_label.set_margin_end(12)
         self.status_label.set_margin_top(4)
-        self.status_label.set_margin_bottom(4)
         self.status_label.set_xalign(0)
-        root.append(self.status_label)
+        status_bar.append(self.status_label)
+
+        self.progress_bar = Gtk.ProgressBar()
+        self.progress_bar.set_margin_start(12)
+        self.progress_bar.set_margin_end(12)
+        self.progress_bar.set_margin_bottom(4)
+        self.progress_bar.set_visible(False)
+        status_bar.append(self.progress_bar)
+
+        root.append(status_bar)
+        self._pulse_source_id: int | None = None
+
+    # ── Progress bar helpers (call from main thread only via GLib.idle_add) ───
+
+    def _progress_start_pulse(self) -> None:
+        """Show progress bar in indeterminate pulse mode."""
+        self.progress_bar.set_visible(True)
+        self.progress_bar.set_fraction(0.0)
+        if self._pulse_source_id is None:
+            self._pulse_source_id = GLib.timeout_add(80, self._on_pulse_tick)
+
+    def _on_pulse_tick(self) -> bool:
+        self.progress_bar.pulse()
+        return True  # keep ticking
+
+    def _progress_set(self, fraction: float) -> None:
+        """Show progress bar at a specific fraction (0.0–1.0)."""
+        if self._pulse_source_id is not None:
+            GLib.source_remove(self._pulse_source_id)
+            self._pulse_source_id = None
+        self.progress_bar.set_visible(True)
+        self.progress_bar.set_fraction(max(0.0, min(1.0, fraction)))
+
+    def _progress_done(self) -> None:
+        """Hide progress bar and stop any pulse timer."""
+        if self._pulse_source_id is not None:
+            GLib.source_remove(self._pulse_source_id)
+            self._pulse_source_id = None
+        self.progress_bar.set_fraction(0.0)
+        self.progress_bar.set_visible(False)
+
+    def _build_games_panel(self) -> Gtk.Box:
+        panel = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        panel.set_size_request(170, -1)
+
+        header_label = Gtk.Label(label="Games")
+        header_label.add_css_class("heading")
+        header_label.set_margin_top(12)
+        header_label.set_margin_bottom(8)
+        panel.append(header_label)
+
+        scroll = Gtk.ScrolledWindow()
+        scroll.set_vexpand(True)
+        scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        panel.append(scroll)
+
+        self.games_list = Gtk.ListBox()
+        self.games_list.set_selection_mode(Gtk.SelectionMode.SINGLE)
+        self.games_list.add_css_class("boxed-list")
+        self.games_list.set_margin_start(8)
+        self.games_list.set_margin_end(8)
+        self.games_list.connect("row-activated", self._on_game_row_activated)
+        scroll.set_child(self.games_list)
+
+        # Add / Remove buttons
+        btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        btn_box.set_margin_start(8)
+        btn_box.set_margin_end(8)
+        btn_box.set_margin_top(8)
+        btn_box.set_margin_bottom(10)
+
+        add_btn = Gtk.Button(label="+ Add")
+        add_btn.set_hexpand(True)
+        add_btn.connect("clicked", self._on_add_game)
+        btn_box.append(add_btn)
+
+        self.remove_game_btn = Gtk.Button(label="- Remove")
+        self.remove_game_btn.set_hexpand(True)
+        self.remove_game_btn.add_css_class("destructive-action")
+        self.remove_game_btn.connect("clicked", self._on_remove_game)
+        self.remove_game_btn.set_sensitive(False)
+        btn_box.append(self.remove_game_btn)
+
+        panel.append(btn_box)
+        return panel
+
+    def _refresh_games(self):
+        """Rebuild the games list box from games/*.json."""
+        while child := self.games_list.get_first_child():
+            self.games_list.remove(child)
+        self.games = available_games()
+        for slug, name in self.games:
+            row = Gtk.ListBoxRow()
+            row._slug = slug
+            lbl = Gtk.Label(label=name)
+            lbl.set_xalign(0)
+            lbl.set_margin_start(8)
+            lbl.set_margin_end(8)
+            lbl.set_margin_top(6)
+            lbl.set_margin_bottom(6)
+            lbl.set_ellipsize(Pango.EllipsizeMode.END)
+            row.set_child(lbl)
+            self.games_list.append(row)
+        # Re-select current game if still present
+        if self._game_slug:
+            for row in self._iter_game_rows():
+                if row._slug == self._game_slug:
+                    self.games_list.select_row(row)
+                    self.remove_game_btn.set_sensitive(True)
+                    break
+
+    def _iter_game_rows(self):
+        row = self.games_list.get_first_child()
+        while row:
+            if isinstance(row, Gtk.ListBoxRow):
+                yield row
+            row = row.get_next_sibling()
+
+    def _on_game_row_activated(self, listbox, row):
+        slug = row._slug
+        self.remove_game_btn.set_sensitive(True)
+        self._select_game(slug)
+
+    def _on_add_game(self, _btn):
+        """Import a game profile .json — opens directly in the games/ folder."""
+        dialog = Gtk.FileDialog()
+        dialog.set_title("Select game profile (.json)")
+        filters = Gtk.FileFilter()
+        filters.set_name("JSON profiles (*.json)")
+        filters.add_pattern("*.json")
+        store = Gio_ListStore_from_filter(filters)
+        dialog.set_filters(store)
+        # Start the file chooser inside games/ so the user sees existing profiles
+        games_dir_file = Gio.File.new_for_path(str(GAMES_DIR))
+        dialog.set_initial_folder(games_dir_file)
+        dialog.open(self, None, self._on_game_profile_selected)
+
+    def _on_game_profile_selected(self, dialog, result):
+        try:
+            f = dialog.open_finish(result)
+        except Exception:
+            return
+        if f is None:
+            return
+        src = Path(f.get_path())
+        dst = GAMES_DIR / src.name
+        if dst.exists():
+            self._toast(f"Profile already exists: {src.name}")
+            return
+        try:
+            import shutil
+            shutil.copy2(src, dst)
+            self._refresh_games()
+            self._toast(f"Added game profile: {src.stem}")
+        except Exception as e:
+            self._toast(f"Failed to add profile: {e}")
+
+    def _on_remove_game(self, _btn):
+        row = self.games_list.get_selected_row()
+        if row is None:
+            return
+        slug = row._slug
+        _, name = next(((s, n) for s, n in self.games if s == slug), (slug, slug))
+        dialog = Adw.MessageDialog(
+            transient_for=self,
+            heading=f'Remove "{name}"?',
+            body="This deletes the game profile file from games/. Installed mods are not affected.",
+        )
+        dialog.add_response("cancel", "Cancel")
+        dialog.add_response("remove", "Remove Profile")
+        dialog.set_response_appearance("remove", Adw.ResponseAppearance.DESTRUCTIVE)
+        dialog.set_default_response("cancel")
+        dialog.connect("response", lambda d, r: self._do_remove_game(slug) if r == "remove" else None)
+        dialog.present()
+
+    def _do_remove_game(self, slug: str):
+        path = GAMES_DIR / f"{slug}.json"
+        try:
+            path.unlink()
+        except Exception as e:
+            self._toast(f"Failed to remove: {e}")
+            return
+        if self._game_slug == slug:
+            self.engine = None
+            self._game_slug = None
+            self.set_title("Linux Steam ModManager")
+            self._refresh_mods()
+            self._refresh_load_order()
+            self.remove_game_btn.set_sensitive(False)
+        self._refresh_games()
+        self._toast(f"Removed profile: {slug}")
 
     def _build_mods_panel(self) -> Gtk.Box:
         panel = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
@@ -293,6 +495,12 @@ class ModManagerWindow(Adw.ApplicationWindow):
         nxm_btn.set_hexpand(True)
         btn_box.append(nxm_btn)
 
+        update_btn = Gtk.Button(label="Check Updates")
+        update_btn.set_tooltip_text("Check Nexus Mods for updates to installed mods")
+        update_btn.connect("clicked", self._on_check_updates)
+        update_btn.set_hexpand(True)
+        btn_box.append(update_btn)
+
         panel.append(btn_box)
         return panel
 
@@ -336,8 +544,8 @@ class ModManagerWindow(Adw.ApplicationWindow):
 
     # ── Game selection ────────────────────────────────────────────────────────
 
-    def _select_game(self, index: int):
-        slug, name = self.games[index]
+    def _select_game(self, slug: str):
+        name = next((n for s, n in self.games if s == slug), slug)
         try:
             self.engine = load_engine(slug)
         except Exception as e:
@@ -345,46 +553,18 @@ class ModManagerWindow(Adw.ApplicationWindow):
             return
 
         self._game_slug = slug
-        self.set_title(f"Linux Mod Manager — {name}")
+        self.set_title(f"Linux Steam ModManager — {name}")
         self._update_load_order_panel()
         self._refresh_mods()
         self._refresh_load_order()
-
-    def _on_game_changed(self, dropdown, _param):
-        self._select_game(dropdown.get_selected())
-
-    def _show_game_picker(self):
-        if not self.games:
-            self._toast("No game profiles found in games/")
-            return
-
-        dialog = Adw.MessageDialog(
-            transient_for=self,
-            heading="Select a Game",
-            body="Which game do you want to manage?",
-        )
-        for slug, name in self.games:
-            dialog.add_response(slug, name)
-        dialog.connect("response", self._on_game_picker_response)
-        dialog.present()
-
-    def _on_game_picker_response(self, dialog, response_id: str):
-        for idx, (slug, _name) in enumerate(self.games):
-            if slug == response_id:
-                # Block notify signal to avoid double-load when syncing dropdown
-                self.game_dropdown.handler_block(self._game_changed_handler)
-                self.game_dropdown.set_selected(idx)
-                self.game_dropdown.handler_unblock(self._game_changed_handler)
-                self._select_game(idx)
-                break
+        self._update_setup_btn()
 
     # ── Steam path setup ──────────────────────────────────────────────────────
 
     def _init_steam_path(self):
+        self._refresh_games()
         if get_steam_root() is None:
             self._show_steam_path_dialog(get_steam_candidates())
-        else:
-            self._show_game_picker()
 
     def _show_steam_path_dialog(self, candidates: list):
         self._steam_candidates = candidates  # stored for index-based response lookup
@@ -428,7 +608,7 @@ class ModManagerWindow(Adw.ApplicationWindow):
     def _apply_steam_path(self, chosen: Path):
         if (chosen / "steamapps").exists():
             save_steam_root(chosen)
-            self._show_game_picker()
+            self._refresh_games()
         else:
             self._toast("That folder is not a valid Steam installation (no steamapps/ found)")
             self._show_steam_path_dialog(get_steam_candidates())
@@ -560,6 +740,7 @@ class ModManagerWindow(Adw.ApplicationWindow):
         self._installing = True
 
         def run():
+            GLib.idle_add(self._progress_start_pulse)
             for i, path in enumerate(paths):
                 GLib.idle_add(
                     self.status_label.set_text,
@@ -567,15 +748,69 @@ class ModManagerWindow(Adw.ApplicationWindow):
                 )
                 try:
                     self.engine.install(path)
+                except ConflictError as ce:
+                    confirmed = self._ask_conflict(ce.conflicts, path.name)
+                    if confirmed:
+                        try:
+                            self.engine.install(path, force=True)
+                        except Exception as e:
+                            GLib.idle_add(self._toast, f"Failed: {path.name} — {e}")
                 except Exception as e:
                     GLib.idle_add(self._toast, f"Failed: {path.name} — {e}")
 
             self._installing = False
+            GLib.idle_add(self._progress_done)
             GLib.idle_add(self.status_label.set_text, "Ready")
             GLib.idle_add(self._refresh_mods)
             GLib.idle_add(self._refresh_load_order)
 
         threading.Thread(target=run, daemon=True).start()
+
+    def _ask_conflict(self, conflicts: list[tuple[str, str]], mod_name: str) -> bool:
+        """
+        Called from a background thread. Shows a conflict dialog on the main
+        thread and blocks until the user responds. Returns True = install anyway.
+        """
+        event = threading.Event()
+        result = [False]
+        GLib.idle_add(self._show_conflict_dialog, conflicts, mod_name, event, result)
+        event.wait()
+        return result[0]
+
+    def _show_conflict_dialog(
+        self,
+        conflicts: list[tuple[str, str]],
+        mod_name: str,
+        event: threading.Event,
+        result: list,
+    ):
+        shown = conflicts[:6]
+        lines = "\n".join(
+            f"  • <tt>{GLib.markup_escape_text(rel)}</tt>\n"
+            f"    owned by <b>{GLib.markup_escape_text(owner)}</b>"
+            for rel, owner in shown
+        )
+        body = f"<b>{mod_name}</b> would overwrite {len(conflicts)} file(s) from other mods:\n\n{lines}"
+        if len(conflicts) > 6:
+            body += f"\n  … and {len(conflicts) - 6} more"
+
+        dialog = Adw.MessageDialog(
+            transient_for=self,
+            heading="Mod Conflict Detected",
+            body=body,
+        )
+        dialog.set_body_use_markup(True)
+        dialog.add_response("cancel", "Cancel")
+        dialog.add_response("overwrite", "Install Anyway")
+        dialog.set_response_appearance("overwrite", Adw.ResponseAppearance.DESTRUCTIVE)
+        dialog.set_default_response("cancel")
+
+        def on_response(_d, r):
+            result[0] = r == "overwrite"
+            event.set()
+
+        dialog.connect("response", on_response)
+        dialog.present()
 
     # ── Uninstall ─────────────────────────────────────────────────────────────
 
@@ -605,6 +840,7 @@ class ModManagerWindow(Adw.ApplicationWindow):
             self.engine.uninstall(mod_name)
             GLib.idle_add(self._refresh_mods)
             GLib.idle_add(self._refresh_load_order)
+            GLib.idle_add(self._update_setup_btn)
             GLib.idle_add(self._toast, f"Uninstalled: {mod_name}")
         threading.Thread(target=run, daemon=True).start()
 
@@ -728,20 +964,114 @@ class ModManagerWindow(Adw.ApplicationWindow):
                 dest = ARCHIVES_DIR / slug / filename
 
                 GLib.idle_add(self.status_label.set_text, f"Downloading {filename}...")
-                download_file(dl_url, dest)
+                GLib.idle_add(self._progress_set, 0.0)
+
+                def on_dl_progress(downloaded: int, total: int) -> None:
+                    if total > 0:
+                        GLib.idle_add(self._progress_set, downloaded / total)
+
+                download_file(dl_url, dest, on_progress=on_dl_progress)
 
                 GLib.idle_add(self.status_label.set_text, f"Installing {filename}...")
-                self.engine.install(dest)
+                GLib.idle_add(self._progress_start_pulse)
+                nexus_meta = {
+                    "game_domain": nxm["game_domain"],
+                    "mod_id": nxm["mod_id"],
+                    "file_id": nxm["file_id"],
+                }
+                try:
+                    self.engine.install(dest, nexus_meta=nexus_meta)
+                except ConflictError as ce:
+                    confirmed = self._ask_conflict(ce.conflicts, filename)
+                    if confirmed:
+                        self.engine.install(dest, force=True, nexus_meta=nexus_meta)
+                    else:
+                        GLib.idle_add(self._progress_done)
+                        GLib.idle_add(self.status_label.set_text, "Ready")
+                        return
 
+                GLib.idle_add(self._progress_done)
                 GLib.idle_add(self.status_label.set_text, "Ready")
                 GLib.idle_add(self._refresh_mods)
                 GLib.idle_add(self._refresh_load_order)
                 GLib.idle_add(self._toast, f"Installed: {filename}")
             except Exception as e:
+                GLib.idle_add(self._progress_done)
                 GLib.idle_add(self.status_label.set_text, "Ready")
                 GLib.idle_add(self._toast, f"NXM import failed: {e}")
 
         threading.Thread(target=run, daemon=True).start()
+
+    # ── Update check ──────────────────────────────────────────────────────────
+
+    def _on_check_updates(self, _btn):
+        if not self.engine:
+            self._toast("Select a game first")
+            return
+        api_key = get_nexus_api_key()
+        if not api_key:
+            self._show_api_key_dialog()
+            return
+        self._do_check_updates(api_key)
+
+    def _do_check_updates(self, api_key: str):
+        from nexus import check_update
+        from installer import load_manifest
+
+        def run():
+            GLib.idle_add(self.status_label.set_text, "Checking for updates...")
+            manifest = load_manifest()
+            updates: list[tuple[str, str, str]] = []  # (mod_name, current_ver, latest_ver)
+            errors: list[str] = []
+            game_slug = self._game_slug
+
+            for mod_name, entry in manifest.items():
+                if entry.get("game") not in (None, game_slug):
+                    continue
+                nx = entry.get("nexus")
+                if not nx:
+                    continue
+                try:
+                    latest = check_update(
+                        nx["game_domain"], nx["mod_id"], nx["file_id"], api_key
+                    )
+                    if latest:
+                        updates.append((
+                            mod_name,
+                            str(nx.get("file_id", "?")),
+                            latest.get("version") or str(latest.get("file_id", "?")),
+                        ))
+                except Exception as e:
+                    errors.append(f"{mod_name}: {e}")
+
+            GLib.idle_add(self.status_label.set_text, "Ready")
+            GLib.idle_add(self._show_update_results, updates, errors)
+
+        threading.Thread(target=run, daemon=True).start()
+
+    def _show_update_results(self, updates: list, errors: list):
+        if not updates and not errors:
+            self._toast("All Nexus mods are up to date")
+            return
+
+        lines = []
+        if updates:
+            lines.append("<b>Updates available:</b>")
+            for name, _old, new_ver in updates:
+                lines.append(f"  • {name}  →  {new_ver}")
+        if errors:
+            if lines:
+                lines.append("")
+            lines.append("<b>Errors:</b>")
+            for e in errors:
+                lines.append(f"  • {e}")
+
+        dialog = Adw.MessageDialog(transient_for=self, heading="Update Check")
+        dialog.set_body_use_markup(True)
+        dialog.set_body("\n".join(lines))
+        dialog.add_response("ok", "OK")
+        dialog.set_default_response("ok")
+        dialog.present()
 
     # ── Profiles ──────────────────────────────────────────────────────────────
 
@@ -859,11 +1189,131 @@ class ModManagerWindow(Adw.ApplicationWindow):
         if not self.engine:
             self._toast("Select a game first")
             return
-        warnings = self.engine.paths.verify()
+        # Engines expose verify() directly, or via .paths for Bethesda engines
+        if hasattr(self.engine, "verify"):
+            warnings = self.engine.verify()
+        elif hasattr(self.engine, "paths"):
+            warnings = self.engine.paths.verify()
+        else:
+            self._toast("Check not supported for this engine")
+            return
         if warnings:
             self._toast(f"⚠ {warnings[0]}" + (f" (+{len(warnings)-1} more)" if len(warnings) > 1 else ""))
         else:
             self._toast("✓ All paths verified")
+
+    def _update_setup_btn(self):
+        if not self.engine:
+            self.setup_btn.set_label("Setup SE")
+            self.setup_btn.set_sensitive(False)
+            return
+        self.setup_btn.set_sensitive(True)
+        if getattr(self.engine, "has_framework_setup", False):
+            installed = self.engine.is_framework_installed()
+            self.setup_btn.set_label("BepInEx ✓" if installed else "Install BepInEx")
+            self.setup_btn.set_tooltip_text(
+                "BepInEx is installed" if installed
+                else "Download and install BepInEx into the game folder"
+            )
+        elif self.engine.has_script_extender:
+            self.setup_btn.set_label("Setup SE")
+            self.setup_btn.set_tooltip_text("Create the script extender launch wrapper")
+        else:
+            self.setup_btn.set_label("Setup SE")
+            self.setup_btn.set_sensitive(False)
+
+    def _on_setup_btn(self, _btn):
+        if not self.engine:
+            return
+        if getattr(self.engine, "has_framework_setup", False):
+            self._on_setup_bepinex()
+        else:
+            self._on_setup_se(None)
+
+    def _on_setup_bepinex(self):
+        if self.engine.is_framework_installed():
+            # Already installed — show launch setup dialog instead
+            self._show_bepinex_launch_dialog()
+            return
+
+        dialog = Adw.MessageDialog(
+            transient_for=self,
+            heading="Install BepInEx",
+            body=(
+                "The latest BepInEx release will be downloaded from GitHub "
+                f"and extracted to:\n<tt>{GLib.markup_escape_text(str(self.engine.game_root))}</tt>\n\n"
+                "BepInEx is required for mods to work in this game."
+            ),
+        )
+        dialog.set_body_use_markup(True)
+        dialog.add_response("cancel", "Cancel")
+        dialog.add_response("install", "Download & Install")
+        dialog.set_response_appearance("install", Adw.ResponseAppearance.SUGGESTED)
+        dialog.set_default_response("install")
+        dialog.connect("response", lambda d, r: self._do_setup_bepinex() if r == "install" else None)
+        dialog.present()
+
+    def _show_bepinex_launch_dialog(self):
+        try:
+            launch_option = self.engine.setup_launch()
+        except RuntimeError as e:
+            self._toast(str(e))
+            return
+
+        copied = False
+        try:
+            self.get_display().get_clipboard().set(launch_option)
+            copied = True
+        except Exception:
+            pass
+
+        clipboard_note = "\nCopied to clipboard." if copied else ""
+        dialog = Adw.MessageDialog(
+            transient_for=self,
+            heading="BepInEx Launch Setup",
+            body=(
+                "BepInEx is installed. To activate mods, set this as your "
+                "<b>Steam Launch Option</b> "
+                "(right-click game → Properties → General):\n\n"
+                f"<tt>{GLib.markup_escape_text(launch_option)}</tt>"
+                f"{clipboard_note}"
+            ),
+        )
+        dialog.set_body_use_markup(True)
+        dialog.add_response("ok", "OK")
+        dialog.present()
+
+    def _do_setup_bepinex(self):
+        def run():
+            GLib.idle_add(self.status_label.set_text, "Fetching BepInEx release info...")
+            GLib.idle_add(self._progress_set, 0.0)
+            try:
+                def on_progress(downloaded, total):
+                    if total > 0:
+                        GLib.idle_add(self._progress_set, downloaded / total)
+                    GLib.idle_add(
+                        self.status_label.set_text,
+                        f"Downloading BepInEx... {downloaded // 1024} KB"
+                        + (f" / {total // 1024} KB" if total > 0 else ""),
+                    )
+
+                version = self.engine.setup_framework(on_progress=on_progress)
+
+                GLib.idle_add(self._progress_start_pulse)
+                GLib.idle_add(self.status_label.set_text, "Extracting BepInEx...")
+                # setup_framework already extracted — just update UI
+                GLib.idle_add(self._progress_done)
+                GLib.idle_add(self.status_label.set_text, "Ready")
+                GLib.idle_add(self._update_setup_btn)
+                GLib.idle_add(self._refresh_mods)
+                GLib.idle_add(self._show_bepinex_launch_dialog)
+                GLib.idle_add(self._toast, f"BepInEx {version} installed successfully")
+            except Exception as e:
+                GLib.idle_add(self._progress_done)
+                GLib.idle_add(self.status_label.set_text, "Ready")
+                GLib.idle_add(self._toast, f"BepInEx install failed: {e}")
+
+        threading.Thread(target=run, daemon=True).start()
 
     def _on_setup_se(self, _btn):
         if not self.engine or not self.engine.has_script_extender:
@@ -902,13 +1352,13 @@ class ModManagerWindow(Adw.ApplicationWindow):
     # ── Utilities ─────────────────────────────────────────────────────────────
 
     def _toast(self, message: str):
-        toast = Adw.Toast(title=message)
+        # Adw.Toast.title is Pango markup — escape special chars (&, <, >) in messages
+        toast = Adw.Toast(title=GLib.markup_escape_text(message))
         self.toast_overlay.add_toast(toast)
 
 
 # GTK4 helper — create a Gio.ListStore from a filter (needed for FileDialog)
 def Gio_ListStore_from_filter(f: Gtk.FileFilter):
-    from gi.repository import Gio
     store = Gio.ListStore.new(Gtk.FileFilter)
     store.append(f)
     return store
@@ -922,10 +1372,23 @@ class ModManagerApp(Adw.Application):
         self.connect("activate", self._on_activate)
 
     def _on_activate(self, app):
-        # Follow system dark/light preference via libadwaita instead of
-        # the deprecated GtkSettings:gtk-application-prefer-dark-theme.
+        # KDE's GTK integration sets gtk-application-prefer-dark-theme via
+        # GtkSettings, which libadwaita warns about. Reset it first so
+        # Adwaita reads our color-scheme setting instead.
+        try:
+            settings = Gtk.Settings.get_default()
+            if settings is not None:
+                settings.reset_property("gtk-application-prefer-dark-theme")
+        except Exception:
+            pass
         Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.PREFER_DARK)
+        # Register app icon (hicolor theme structure under assets/) for taskbar
+        assets_dir = ROOT / "assets"
+        if assets_dir.exists():
+            display = Gdk.Display.get_default()
+            Gtk.IconTheme.get_for_display(display).add_search_path(str(assets_dir))
         win = ModManagerWindow(app)
+        win.set_icon_name("lsmm")
         win.present()
 
 

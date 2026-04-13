@@ -70,11 +70,50 @@ def get_download_link(nxm: dict, api_key: str) -> str:
     return data[0]["URI"]
 
 
+def get_mod_files(game_domain: str, mod_id: int, api_key: str) -> list[dict]:
+    """
+    Fetch all file listings for a mod from Nexus API.
+    Returns list of file dicts (file_id, name, version, category_name, uploaded_timestamp, …).
+    """
+    endpoint = f"{NEXUS_API_BASE}/games/{game_domain}/mods/{mod_id}/files.json"
+    req = urllib.request.Request(
+        endpoint,
+        headers={"apikey": api_key, "User-Agent": USER_AGENT},
+    )
+    try:
+        with urllib.request.urlopen(req) as resp:
+            data = json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        body = e.read().decode(errors="replace")
+        raise RuntimeError(f"Nexus API {e.code}: {body}") from e
+    return data.get("files", [])
+
+
+def check_update(game_domain: str, mod_id: int, current_file_id: int, api_key: str) -> dict | None:
+    """
+    Check if a newer MAIN file exists for a mod.
+    Returns the latest MAIN file dict if it differs from current_file_id, else None.
+    """
+    files = get_mod_files(game_domain, mod_id, api_key)
+    main_files = [f for f in files if f.get("category_name") == "MAIN"]
+    if not main_files:
+        return None
+    latest = max(main_files, key=lambda f: f.get("uploaded_timestamp", 0))
+    if latest.get("file_id") != current_file_id:
+        return latest
+    return None
+
+
 def download_file(url: str, dest: Path, on_progress=None) -> None:
     """
     Download URL to dest. Calls on_progress(downloaded_bytes, total_bytes) if given.
     """
-    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    # CDN URLs sometimes contain spaces or unencoded chars in the path — fix them
+    parsed = urllib.parse.urlsplit(url)
+    safe_url = urllib.parse.urlunsplit(
+        parsed._replace(path=urllib.parse.quote(parsed.path, safe="/:@!$&'()*+,;="))
+    )
+    req = urllib.request.Request(safe_url, headers={"User-Agent": USER_AGENT})
     with urllib.request.urlopen(req) as resp:
         total = int(resp.headers.get("Content-Length", 0))
         dest.parent.mkdir(parents=True, exist_ok=True)

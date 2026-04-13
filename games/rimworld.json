@@ -1,8 +1,0 @@
-{
-  "name": "RimWorld",
-  "steam_app_id": "294100",
-  "engine": "rimworld",
-  "game_exe": "RimWorldLinux",
-  "install_subdir": "RimWorld",
-  "script_extender": null
-}

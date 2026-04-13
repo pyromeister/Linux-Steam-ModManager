@@ -1,4 +1,8 @@
-# Linux Mod Manager
+# Linux Steam ModManager (LSMM)
+
+<p align="center">
+  <img src="assets/icon.png" width="128" alt="LSMM Logo"/>
+</p>
 
 A native Linux mod manager for Steam games with engine-plugin architecture.
 Supports Bethesda games (Starfield, Skyrim SE, Fallout 4) out of the box, with a
@@ -24,6 +28,9 @@ fill that gap with a proper native tool.
 
 - Install mods from `.zip`, `.7z`, and `.rar` archives
 - **NXM URL import** *(experimental)* — paste an `nxm://` link from Nexus Mods for direct download + install (requires free Nexus API key)
+- **Update check** — "Check Updates" button queries Nexus Mods API for newer versions of installed mods (NXM-imported only; requires API key)
+- **Progress bar** — install and download operations show a progress bar; NXM downloads display real percentage, file installs use pulse mode
+- **Games panel** — dedicated left column lists all game profiles; click to switch game, import external profiles via "Add", remove profiles via "Remove"
 - **Mod profiles** — save and restore named loadouts (active mods + load order) per game
 - Automatically detects mod structure and copies files to the correct location
 - Handles standard `Data/`, double-nested `Data/Data/`, single-wrapper `ModName/Data/`, and bare-root layouts
@@ -134,6 +141,7 @@ The manager keeps its data under `~/.local/share/linux-mod-manager/`:
 |---------|------|--------|-----------------|
 | `starfield` | Starfield | Bethesda | SFSE |
 | `skyrim_se` | Skyrim Special Edition | Bethesda | SKSE |
+| `planet_crafter` | The Planet Crafter | BepInEx | BepInEx *(auto-installed via "Install BepInEx" button)* |
 | `fallout4` *(planned)* | Fallout 4 | Bethesda | F4SE |
 | `rimworld` *(planned)* | RimWorld | RimWorld | — |
 | `witcher3` *(planned)* | The Witcher 3 | Witcher3 | — |

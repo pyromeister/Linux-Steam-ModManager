@@ -16,7 +16,9 @@ from plugins import PluginsFile
 from installer import (
     DLL_EXTENSION,
     PLUGIN_EXTENSIONS,
+    ConflictError,
     cache_archive,
+    check_conflicts,
     detect_and_install,
     extract,
     load_manifest,
@@ -43,13 +45,29 @@ class BethesdaEngine(BaseEngine):
 
     # ── Install ──────────────────────────────────────────────────────────────
 
-    def install(self, archive_path: Path, mod_name: str = None) -> None:
+    def install(
+        self,
+        archive_path: Path,
+        mod_name: str = None,
+        force: bool = False,
+        nexus_meta: dict | None = None,
+    ) -> None:
+        """
+        Install a mod archive. Raises ConflictError if the mod would overwrite
+        files owned by another tracked mod — unless force=True.
+        nexus_meta: optional dict with keys game_domain, mod_id, file_id.
+        """
         name = mod_name or archive_path.stem
         game_slug = self.profile.get("slug")
         tmp = Path(f"/tmp/linuxmm_{name}")
         try:
             print(f"Extracting {archive_path.name}...")
             extract(archive_path, tmp)
+
+            if not force:
+                conflicts = check_conflicts(tmp, self.paths.data_dir, load_manifest(), name)
+                if conflicts:
+                    raise ConflictError(conflicts)
 
             archive_cache = cache_archive(archive_path, game_slug)
 
@@ -65,7 +83,8 @@ class BethesdaEngine(BaseEngine):
             plugins_file.write()
 
             record_install(name, archive_path, installed, game_slug=game_slug,
-                           archive_cache=archive_cache, backups=backups)
+                           archive_cache=archive_cache, backups=backups,
+                           nexus_meta=nexus_meta)
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
@@ -111,10 +130,18 @@ class BethesdaEngine(BaseEngine):
         result = []
         tracked_se_dlls: set[str] = set()
 
+        data_dir_str = str(self.paths.data_dir)
+
         for name, entry in manifest.items():
             entry_game = entry.get("game")
             if entry_game is not None and entry_game != game_slug:
                 continue
+            # Old entries without a game tag: check file paths to avoid
+            # showing mods from other games (e.g. Starfield mods in Skyrim).
+            if entry_game is None:
+                files = entry.get("files", [])
+                if files and not any(f.startswith(data_dir_str) for f in files):
+                    continue
             files = entry.get("files", [])
             plugins = []
             for f in files:

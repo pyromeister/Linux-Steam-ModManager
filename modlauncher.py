@@ -35,9 +35,11 @@ def load_engine(game: str):
     if engine_name == "bethesda":
         from bethesda import BethesdaEngine
         return BethesdaEngine(profile)
-    else:
-        print(f"Engine '{engine_name}' not yet implemented.")
-        sys.exit(1)
+    if engine_name == "bepinex":
+        from bepinex import BepInExEngine
+        return BepInExEngine(profile)
+    print(f"Engine '{engine_name}' not yet implemented.")
+    sys.exit(1)
 
 
 # ── Commands ─────────────────────────────────────────────────────────────────
