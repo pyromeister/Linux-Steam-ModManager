@@ -42,6 +42,9 @@ def load_engine(game: str):
     if engine_name == "bepinex":
         from bepinex import BepInExEngine
         return BepInExEngine(profile)
+    if engine_name == "rimworld":
+        from rimworld import RimWorldEngine
+        return RimWorldEngine(profile)
     raise ValueError(f"Engine '{engine_name}' not yet implemented")
 
 
