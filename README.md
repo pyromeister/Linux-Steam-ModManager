@@ -202,4 +202,4 @@ Open an issue before starting large changes.
 
 ## License
 
-MIT
+GPLv3 — free to use, modify, and distribute; any derivative work must remain open source under the same license. See [LICENSE](LICENSE) for details.
