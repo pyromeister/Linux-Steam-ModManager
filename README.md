@@ -73,8 +73,8 @@ sequentially.
 ## Installation
 
 ```bash
-git clone https://github.com/pyromaster/linux-sfse-modlauncher
-cd linux-sfse-modlauncher
+git clone https://github.com/pyromeister/Linux-Steam-ModManager
+cd Linux-Steam-ModManager
 ```
 
 No pip dependencies — standard library only (GUI requires system GTK4 packages, see Requirements).

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""GUI entry point for Linux Mod Manager."""
+"""GUI entry point for Linux Steam ModManager."""
 
 import sys
 from pathlib import Path

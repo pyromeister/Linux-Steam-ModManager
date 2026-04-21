@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Linux Mod Manager — CLI
+Linux Steam ModManager — CLI
 Usage:
   modlauncher.py --game starfield install <archive.zip>
   modlauncher.py --game starfield uninstall <mod_name>
@@ -153,7 +153,7 @@ COMMANDS = {
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Linux Mod Manager")
+    parser = argparse.ArgumentParser(description="Linux Steam ModManager")
     parser.add_argument("--game", default="starfield", help="Game profile name")
     parser.add_argument("command", choices=list(COMMANDS.keys()))
     parser.add_argument("archive", nargs="?", help="Archive path (install)")
