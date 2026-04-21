@@ -1,0 +1,41 @@
+name: Bug Report
+description: Report a bug in LSMM
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: textarea
+    attributes:
+      label: Description
+      description: What happened?
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Steps to reproduce
+      description: How can we reproduce this?
+      placeholder: |
+        1. Open LSMM
+        2. Select game X
+        3. ...
+
+  - type: input
+    attributes:
+      label: LSMM version
+      placeholder: "e.g. v0.1.0-alpha"
+    validations:
+      required: true
+
+  - type: input
+    attributes:
+      label: Game / game profile
+      placeholder: "e.g. Starfield, Skyrim SE"
+
+  - type: textarea
+    attributes:
+      label: System info
+      description: OS, Python version, GTK version
+      placeholder: |
+        OS: Ubuntu 24.04
+        Python: 3.12
+        GTK: 4.x
