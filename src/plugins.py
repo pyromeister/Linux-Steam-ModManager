@@ -45,7 +45,7 @@ class PluginsFile:
 
     @property
     def plugins(self) -> list[PluginEntry]:
-        return [l for l in self._lines if isinstance(l, PluginEntry)]
+        return [e for e in self._lines if isinstance(e, PluginEntry)]
 
     def get(self, name: str) -> PluginEntry | None:
         return next((p for p in self.plugins if p.name == name), None)
@@ -57,8 +57,8 @@ class PluginsFile:
 
     def remove(self, name: str) -> None:
         self._lines = [
-            l for l in self._lines
-            if not (isinstance(l, PluginEntry) and l.name == name)
+            e for e in self._lines
+            if not (isinstance(e, PluginEntry) and e.name == name)
         ]
 
     def set_active(self, name: str, active: bool) -> None:
@@ -72,7 +72,7 @@ class PluginsFile:
     def set_order(self, order: list[str]) -> None:
         """Reorder plugins to match `order`. Unknown names appended at end."""
         plugin_map = {p.name: p for p in self.plugins}
-        non_plugins = [l for l in self._lines if not isinstance(l, PluginEntry)]
+        non_plugins = [e for e in self._lines if not isinstance(e, PluginEntry)]
 
         ordered = []
         for name in order:

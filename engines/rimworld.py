@@ -223,7 +223,10 @@ class RimWorldEngine(BaseEngine):
             tracked_dirs.add(mod_dir.name)
             about = _read_about(mod_dir) if mod_dir.exists() else {"packageId": mod_dir.name.lower(), "name": mod_name}
             active = about["packageId"] in active_ids
-            result.append({"name": mod_name, "display": about["name"], "packageId": about["packageId"], "active": active, "plugins": []})
+            result.append({
+                "name": mod_name, "display": about["name"],
+                "packageId": about["packageId"], "active": active, "plugins": [],
+            })
 
         # Untracked mods in Mods/ dir
         for mod_dir in sorted(self.mods_dir.iterdir()):
@@ -231,7 +234,10 @@ class RimWorldEngine(BaseEngine):
                 continue
             about = _read_about(mod_dir)
             active = about["packageId"] in active_ids
-            result.append({"name": mod_dir.name, "display": about["name"], "packageId": about["packageId"], "active": active, "plugins": [], "untracked": True})
+            result.append({
+                "name": mod_dir.name, "display": about["name"],
+                "packageId": about["packageId"], "active": active, "plugins": [], "untracked": True,
+            })
 
         return result
 

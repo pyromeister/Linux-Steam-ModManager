@@ -212,7 +212,7 @@ class BethesdaEngine(BaseEngine):
         script_path.chmod(script_path.stat().st_mode | stat.S_IEXEC)
 
         print(f"✓ Launch script created: {script_path}")
-        print(f"\nAdd this to Steam launch options:")
+        print("\nAdd this to Steam launch options:")
         print(f'  "{script_path}" %command%')
         return script_path
 

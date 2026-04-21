@@ -8,7 +8,6 @@ Caches mod archives and backs up overwritten files for safe restore.
 import json
 import shutil
 import subprocess
-import sys
 import zipfile
 from pathlib import Path
 
