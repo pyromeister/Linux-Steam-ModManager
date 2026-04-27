@@ -183,7 +183,7 @@ class PluginRow(Gtk.ListBoxRow):
 # ── Main window ───────────────────────────────────────────────────────────────
 
 class ModManagerWindow(Adw.ApplicationWindow):
-    def __init__(self, app):
+    def __init__(self, app, pending_nxm: str | None = None):
         super().__init__(application=app)
         self.set_title("Linux Steam ModManager")
         self.set_default_size(1280, 800)
@@ -192,9 +192,7 @@ class ModManagerWindow(Adw.ApplicationWindow):
         self.games = available_games()
         self._installing = False
         self._game_slug = None
-        self._pending_nxm: str | None = next(
-            (a for a in sys.argv[1:] if a.lower().startswith("nxm://")), None
-        )
+        self._pending_nxm: str | None = pending_nxm
 
         self._build_ui()
         self._update_setup_btn()
@@ -938,6 +936,11 @@ class ModManagerWindow(Adw.ApplicationWindow):
         self._do_nxm_import(url, api_key)
         return GLib.SOURCE_REMOVE
 
+    def handle_nxm_url(self, url: str) -> None:
+        """Called by ModManagerApp when an NXM URL arrives in a running instance."""
+        self.present()
+        GLib.idle_add(self._handle_startup_nxm, url)
+
     def _show_nxm_api_key_hint(self) -> None:
         dialog = Adw.MessageDialog(
             transient_for=self,
@@ -1604,9 +1607,12 @@ class ModManagerApp(Adw.Application):
     def __init__(self):
         super().__init__(
             application_id="io.github.linuxmodmanager",
-            flags=Gio.ApplicationFlags.NON_UNIQUE,
+            flags=Gio.ApplicationFlags.HANDLES_COMMAND_LINE,
         )
+        self._window: ModManagerWindow | None = None
+        self._pending_nxm_for_activate: str | None = None
         self.connect("activate", self._on_activate)
+        self.connect("command-line", self._on_command_line)
 
     def _on_activate(self, app):
         try:
@@ -1620,11 +1626,23 @@ class ModManagerApp(Adw.Application):
         if assets_dir.exists():
             display = Gdk.Display.get_default()
             Gtk.IconTheme.get_for_display(display).add_search_path(str(assets_dir))
-        win = ModManagerWindow(app)
-        win.set_icon_name("lsmm")
-        win.present()
+        if self._window is None:
+            self._window = ModManagerWindow(app, pending_nxm=self._pending_nxm_for_activate)
+            self._pending_nxm_for_activate = None
+            self._window.set_icon_name("lsmm")
+        self._window.present()
+
+    def _on_command_line(self, app, command_line):
+        args = command_line.get_arguments()
+        nxm_url = next((a for a in args[1:] if a.lower().startswith("nxm://")), None)
+        if self._window is None:
+            self._pending_nxm_for_activate = nxm_url
+        self.activate()
+        if nxm_url and self._window:
+            self._window.handle_nxm_url(nxm_url)
+        return 0
 
 
 def main():
     app = ModManagerApp()
-    app.run([sys.argv[0]])
+    app.run(sys.argv)
