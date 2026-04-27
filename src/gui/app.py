@@ -220,6 +220,13 @@ class ModManagerWindow(Adw.ApplicationWindow):
         self.setup_btn.connect("clicked", self._on_setup_btn)
         header.pack_end(self.setup_btn)
 
+        self.launch_btn = Gtk.Button(label="▶ Launch")
+        self.launch_btn.add_css_class("suggested-action")
+        self.launch_btn.set_tooltip_text("Launch game via Steam")
+        self.launch_btn.set_sensitive(False)
+        self.launch_btn.connect("clicked", self._on_launch_game)
+        header.pack_end(self.launch_btn)
+
         # Header buttons — left side
         help_btn = Gtk.Button()
         help_btn.set_icon_name("help-about-symbolic")
@@ -471,6 +478,15 @@ class ModManagerWindow(Adw.ApplicationWindow):
         header_label.set_margin_bottom(8)
         panel.append(header_label)
 
+        # Search field
+        self.mods_search = Gtk.SearchEntry()
+        self.mods_search.set_placeholder_text("Search mods…")
+        self.mods_search.set_margin_start(12)
+        self.mods_search.set_margin_end(12)
+        self.mods_search.set_margin_bottom(8)
+        self.mods_search.connect("search-changed", self._on_mods_search_changed)
+        panel.append(self.mods_search)
+
         # Scrollable mod list
         scroll = Gtk.ScrolledWindow()
         scroll.set_vexpand(True)
@@ -482,6 +498,7 @@ class ModManagerWindow(Adw.ApplicationWindow):
         self.mods_list.add_css_class("boxed-list")
         self.mods_list.set_margin_start(12)
         self.mods_list.set_margin_end(12)
+        self.mods_list.set_filter_func(self._mods_filter_func)
         scroll.set_child(self.mods_list)
 
         # Empty state
@@ -577,6 +594,7 @@ class ModManagerWindow(Adw.ApplicationWindow):
         self._refresh_mods()
         self._refresh_load_order()
         self._update_setup_btn()
+        self.launch_btn.set_sensitive(bool(self.engine.profile.get("steam_app_id")))
 
     # ── Steam path setup ──────────────────────────────────────────────────────
 
@@ -712,9 +730,34 @@ class ModManagerWindow(Adw.ApplicationWindow):
             self.mods_list.append(self.empty_label)
             return
 
-        for mod in mods:
+        for mod in sorted(mods, key=lambda m: m["name"].lower()):
             row = ModRow(mod, self._on_toggle_mod)
             self.mods_list.append(row)
+
+    def _mods_filter_func(self, row: Gtk.ListBoxRow) -> bool:
+        query = self.mods_search.get_text().strip().lower()
+        if not query:
+            return True
+        if not isinstance(row, ModRow):
+            return True
+        return query in row.mod_name.lower()
+
+    def _on_mods_search_changed(self, _entry):
+        self.mods_list.invalidate_filter()
+
+    def _on_launch_game(self, _btn):
+        if not self.engine:
+            return
+        app_id = self.engine.profile.get("steam_app_id", "")
+        if not app_id:
+            self._toast("No Steam App ID for this game")
+            return
+        import subprocess
+        try:
+            subprocess.Popen(["xdg-open", f"steam://rungameid/{app_id}"])
+            self._toast("Launching via Steam…")
+        except Exception as e:
+            self._toast(f"Launch failed: {e}")
 
     def _on_toggle_mod(self, mod_name: str, active: bool):
         def run():
