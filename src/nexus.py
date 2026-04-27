@@ -104,6 +104,20 @@ def check_update(game_domain: str, mod_id: int, current_file_id: int, api_key: s
     return None
 
 
+def fetch_collection(slug: str, api_key: str) -> dict | None:
+    """Fetch collection metadata from Nexus API. Returns None on any failure."""
+    endpoint = f"{NEXUS_API_BASE}/collections/{slug}.json"
+    req = urllib.request.Request(
+        endpoint,
+        headers={"apikey": api_key, "User-Agent": USER_AGENT},
+    )
+    try:
+        with urllib.request.urlopen(req) as resp:
+            return json.loads(resp.read())
+    except Exception:
+        return None
+
+
 def download_file(url: str, dest: Path, on_progress=None) -> None:
     """
     Download URL to dest. Calls on_progress(downloaded_bytes, total_bytes) if given.

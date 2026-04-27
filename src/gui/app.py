@@ -174,7 +174,7 @@ class ModManagerWindow(Adw.ApplicationWindow):
     def __init__(self, app):
         super().__init__(application=app)
         self.set_title("Linux Steam ModManager")
-        self.set_default_size(900, 600)
+        self.set_default_size(1280, 800)
 
         self.engine = None
         self.games = available_games()
@@ -219,13 +219,14 @@ class ModManagerWindow(Adw.ApplicationWindow):
         self._profiles_popover_box.set_margin_end(12)
         self._profiles_popover_box.set_margin_top(10)
         self._profiles_popover_box.set_margin_bottom(10)
-        self._profiles_popover_box.set_size_request(220, -1)
+        self._profiles_popover_box.set_size_request(280, -1)
 
         profiles_popover = Gtk.Popover()
+        profiles_popover.set_autohide(True)
         profiles_popover.set_child(self._profiles_popover_box)
         profiles_popover.connect("show", self._rebuild_profiles_popover)
 
-        profiles_menu_btn = Gtk.MenuButton(label="Profiles")
+        profiles_menu_btn = Gtk.MenuButton(label="Profiles/Modpacks")
         profiles_menu_btn.set_tooltip_text("Save and load mod profiles")
         profiles_menu_btn.set_popover(profiles_popover)
         header.pack_start(profiles_menu_btn)
@@ -297,7 +298,7 @@ class ModManagerWindow(Adw.ApplicationWindow):
 
     def _build_games_panel(self) -> Gtk.Box:
         panel = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        panel.set_size_request(170, -1)
+        panel.set_size_request(200, -1)
 
         header_label = Gtk.Label(label="Games")
         header_label.add_css_class("heading")
@@ -448,8 +449,7 @@ class ModManagerWindow(Adw.ApplicationWindow):
 
     def _build_mods_panel(self) -> Gtk.Box:
         panel = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        panel.set_hexpand(True)
-        panel.set_size_request(360, -1)
+        panel.set_size_request(680, -1)
 
         # Panel header
         header_label = Gtk.Label(label="Installed Mods")
@@ -1165,6 +1165,78 @@ class ModManagerWindow(Adw.ApplicationWindow):
             btn_row.append(load_btn)
             btn_row.append(del_btn)
             box.append(btn_row)
+
+        # ── Import modpack section ──
+        sep2 = Gtk.Separator()
+        sep2.set_margin_top(4)
+        sep2.set_margin_bottom(4)
+        box.append(sep2)
+
+        import_label = Gtk.Label(label="Import Modpack from Nexus:")
+        import_label.set_xalign(0)
+        import_label.add_css_class("caption")
+        box.append(import_label)
+
+        import_entry = Gtk.Entry()
+        import_entry.set_placeholder_text("https://www.nexusmods.com/…/collections/…")
+        box.append(import_entry)
+
+        import_btn = Gtk.Button(label="Import Modpack")
+
+        def do_import(_btn):
+            url = import_entry.get_text().strip()
+            if not url:
+                return
+            popover.popdown()
+            self._on_import_collection(url)
+
+        import_btn.connect("clicked", do_import)
+        box.append(import_btn)
+
+    def _on_import_collection(self, url: str):
+        if not self.engine:
+            self._toast("Select a game first")
+            return
+
+        import re
+        m = re.search(r"nexusmods\.com/(?:games/)?([^/]+)/collections/([a-z0-9]+)", url, re.I)
+        if not m:
+            self._toast("Invalid collection URL — expected nexusmods.com/…/collections/…")
+            return
+
+        collection_slug = m.group(2)
+        slug = self._game_slug
+        api_key = get_nexus_api_key()
+
+        def run():
+            collection_name = collection_slug
+            if api_key:
+                from nexus import fetch_collection
+                info = fetch_collection(collection_slug, api_key)
+                if info and isinstance(info, dict):
+                    collection_name = info.get("name") or collection_slug
+
+            import profiles as prof
+            prof.save(slug, collection_name, [], [])
+            GLib.idle_add(self._show_collection_import_dialog, collection_name)
+
+        threading.Thread(target=run, daemon=True).start()
+
+    def _show_collection_import_dialog(self, name: str):
+        dialog = Adw.MessageDialog(
+            transient_for=self,
+            heading="Modpack Profile Created",
+            body=(
+                f"Profile <b>{GLib.markup_escape_text(name)}</b> has been saved.\n\n"
+                "Nexus Mods requires downloading each mod individually. "
+                "Install the mods from the collection via <b>+ Install</b> or <b>NXM URL</b>, "
+                "then load this profile to activate them all at once."
+            ),
+        )
+        dialog.set_body_use_markup(True)
+        dialog.add_response("ok", "OK")
+        dialog.set_default_response("ok")
+        dialog.present()
 
     def _apply_profile(self, slug: str, name: str):
         import profiles as prof
