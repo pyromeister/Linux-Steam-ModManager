@@ -1,0 +1,12 @@
+{
+  "name": "Craftopia",
+  "steam_app_id": "1307550",
+  "engine": "bepinex",
+  "game_exe": "Craftopia.exe",
+  "install_subdir": "Craftopia",
+  "proton": true,
+  "bepinex": {
+    "plugins_dir": "BepInEx/plugins",
+    "build": "win_x64"
+  }
+}
