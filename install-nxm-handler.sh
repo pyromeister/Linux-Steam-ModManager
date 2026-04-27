@@ -11,7 +11,7 @@ mkdir -p "$DESKTOP_DIR"
 cat > "$DESKTOP_FILE" <<EOF
 [Desktop Entry]
 Name=Linux Steam ModManager
-Exec=python3 $SCRIPT_DIR/src/gui/app.py %u
+Exec=python3 $SCRIPT_DIR/modlauncher-gui.py %u
 Type=Application
 MimeType=x-scheme-handler/nxm;
 NoDisplay=false
