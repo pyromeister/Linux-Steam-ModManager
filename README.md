@@ -5,8 +5,8 @@
 </p>
 
 A native Linux mod manager for Steam games with engine-plugin architecture.
-Supports Bethesda games (Starfield, Skyrim SE, Fallout 4) out of the box, with a
-plugin system designed to support other games (RimWorld, Witcher 3, etc.) in the future.
+Supports Bethesda games (Starfield, Skyrim SE, Fallout 4), BepInEx games (Planet Crafter, Craftopia),
+and ModFolder games (Stardew Valley with SMAPI auto-install, RimWorld, 7 Days to Die) out of the box.
 
 > ⚠️ **Early Alpha.** Core features work (Starfield tested). Expect rough edges. Not recommended for large mod setups yet.
 
@@ -31,7 +31,11 @@ fill that gap with a proper native tool.
 - **Update check** — "Check Updates" button queries Nexus Mods API for newer versions of installed mods (NXM-imported only; requires API key)
 - **Progress bar** — install and download operations show a progress bar; NXM downloads display real percentage, file installs use pulse mode
 - **Games panel** — dedicated left column lists all game profiles; click to switch game, import external profiles via "Add", remove profiles via "Remove"
-- **Mod profiles** — save and restore named loadouts (active mods + load order) per game
+- **Mod profiles** — save and restore named loadouts (active mods + load order) per game; "Save" button updates the selected profile in-place
+- **Launch game** — launch the selected game directly from the GUI
+- **Mod list search & sort** — alphabetic sort with live search filter
+- **Nexus collection import** — import a Nexus collection mod list; Missing/Installed sections show what's needed at a glance
+- **SMAPI auto-install** — installs the latest SMAPI release for Stardew Valley automatically via GitHub releases
 - Automatically detects mod structure and copies files to the correct location
 - Handles standard `Data/`, double-nested `Data/Data/`, single-wrapper `ModName/Data/`, and bare-root layouts
 - Manages `Plugins.txt` load order for Bethesda games
@@ -96,7 +100,11 @@ Full command reference: [CLI Reference](https://github.com/pyromeister/Linux-Ste
 
 ## Supported Games
 
-Starfield, Skyrim SE, The Planet Crafter — more planned.
+| Engine | Games |
+|--------|-------|
+| Bethesda | Starfield, Skyrim SE, Fallout 4 (SFSE / SKSE / F4SE via Proton) |
+| BepInEx | Planet Crafter (Proton), Craftopia (Proton) |
+| ModFolder / SMAPI | Stardew Valley (SMAPI auto-install), RimWorld, 7 Days to Die |
 
 Full list with engine and script extender details: [Supported Games](https://github.com/pyromeister/Linux-Steam-ModManager/wiki/Supported-Games)
 
