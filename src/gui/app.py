@@ -192,11 +192,7 @@ class ModManagerWindow(Adw.ApplicationWindow):
         self.games = available_games()
         self._installing = False
         self._game_slug = None
-        self._pending_nxm: str | None = None
-        for _arg in sys.argv[1:]:
-            if _arg.lower().startswith("nxm://"):
-                self._pending_nxm = _arg
-                break
+        self._pending_nxm: str | None = None  # set by ModManagerApp._on_open
 
         self._build_ui()
         self._update_setup_btn()
@@ -917,13 +913,11 @@ class ModManagerWindow(Adw.ApplicationWindow):
 
     def _handle_startup_nxm(self, url: str) -> bool:
         from nexus import parse_nxm
-        self._toast(f"NXM received: {url[:60]}…")
         parsed = parse_nxm(url)
         if not parsed:
-            self._toast(f"NXM parse failed — URL: {url[:80]}")
+            self._toast(f"Invalid NXM URL: {url[:60]}")
             return GLib.SOURCE_REMOVE
 
-        self._toast(f"NXM parsed: {parsed.get('game_domain')} mod {parsed.get('mod_id')}")
         slug = find_game_by_nexus_domain(parsed.get("game_domain", ""))
         if slug:
             for row in self._iter_game_rows():
@@ -932,7 +926,7 @@ class ModManagerWindow(Adw.ApplicationWindow):
                     break
             self._select_game(slug)
         else:
-            self._toast(f"No profile for domain: {parsed.get('game_domain')}")
+            self._toast(f"No profile for Nexus domain: {parsed.get('game_domain')}")
 
         api_key = get_nexus_api_key()
         if not api_key:
@@ -1523,13 +1517,14 @@ def Gio_ListStore_from_filter(f: Gtk.FileFilter):
 
 class ModManagerApp(Adw.Application):
     def __init__(self):
-        super().__init__(application_id="io.github.linuxmodmanager")
+        super().__init__(
+            application_id="io.github.linuxmodmanager",
+            flags=Gio.ApplicationFlags.HANDLES_OPEN,
+        )
         self.connect("activate", self._on_activate)
+        self.connect("open", self._on_open)
 
-    def _on_activate(self, app):
-        # KDE's GTK integration sets gtk-application-prefer-dark-theme via
-        # GtkSettings, which libadwaita warns about. Reset it first so
-        # Adwaita reads our color-scheme setting instead.
+    def _setup_display(self):
         try:
             settings = Gtk.Settings.get_default()
             if settings is not None:
@@ -1537,14 +1532,43 @@ class ModManagerApp(Adw.Application):
         except Exception:
             pass
         Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.PREFER_DARK)
-        # Register app icon (hicolor theme structure under assets/) for taskbar
         assets_dir = ROOT / "assets"
         if assets_dir.exists():
             display = Gdk.Display.get_default()
             Gtk.IconTheme.get_for_display(display).add_search_path(str(assets_dir))
-        win = ModManagerWindow(app)
-        win.set_icon_name("lsmm")
+
+    def _get_or_create_window(self) -> ModManagerWindow:
+        win = self.get_active_window()
+        if win is None:
+            self._setup_display()
+            win = ModManagerWindow(self)
+            win.set_icon_name("lsmm")
+        return win
+
+    def _on_activate(self, app):
+        win = self._get_or_create_window()
         win.present()
+
+    def _on_open(self, app, files, n_files, hint):
+        nxm_url = None
+        for f in files:
+            uri = f.get_uri()
+            if uri.lower().startswith("nxm://"):
+                nxm_url = uri
+                break
+
+        fresh = self.get_active_window() is None
+        win = self._get_or_create_window()
+        win.present()
+
+        if nxm_url:
+            if fresh:
+                # Window just created — _init_steam_path not yet run; pending
+                # nxm is picked up there after games list is ready.
+                win._pending_nxm = nxm_url
+            else:
+                # Already running — trigger download immediately.
+                GLib.idle_add(win._handle_startup_nxm, nxm_url)
 
 
 def main():
