@@ -4,6 +4,7 @@
   "engine": "modfolder",
   "game_exe": "7DaysToDie.x86_64",
   "install_subdir": "7 Days To Die",
+  "nexus_domain": "7daystodie",
   "modfolder": {
     "mods_dir": "Mods"
   }

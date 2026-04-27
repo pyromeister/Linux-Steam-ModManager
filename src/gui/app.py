@@ -51,6 +51,18 @@ def load_engine(game: str):
     raise ValueError(f"Engine '{engine_name}' not yet implemented")
 
 
+def find_game_by_nexus_domain(domain: str) -> str | None:
+    """Return the game slug whose nexus_domain matches *domain*, or None."""
+    for p in GAMES_DIR.glob("*.json"):
+        try:
+            data = json.loads(p.read_text())
+            if data.get("nexus_domain", "").lower() == domain.lower():
+                return p.stem
+        except Exception:
+            continue
+    return None
+
+
 def available_games() -> list[tuple[str, str]]:
     """Returns [(slug, display_name), ...]"""
     result = []
@@ -180,6 +192,11 @@ class ModManagerWindow(Adw.ApplicationWindow):
         self.games = available_games()
         self._installing = False
         self._game_slug = None
+        self._pending_nxm: str | None = None
+        for _arg in sys.argv[1:]:
+            if _arg.lower().startswith("nxm://"):
+                self._pending_nxm = _arg
+                break
 
         self._build_ui()
         self._update_setup_btn()
@@ -571,6 +588,10 @@ class ModManagerWindow(Adw.ApplicationWindow):
         self._refresh_games()
         if get_steam_root() is None:
             self._show_steam_path_dialog(get_steam_candidates())
+        if self._pending_nxm:
+            nxm_url = self._pending_nxm
+            self._pending_nxm = None
+            GLib.idle_add(self._handle_startup_nxm, nxm_url)
 
     def _show_steam_path_dialog(self, candidates: list):
         self._steam_candidates = candidates  # stored for index-based response lookup
@@ -893,6 +914,57 @@ class ModManagerWindow(Adw.ApplicationWindow):
             self.plugins_list.append(PluginRow(name, i, self._move_plugin))
 
     # ── NXM import ────────────────────────────────────────────────────────────
+
+    def _handle_startup_nxm(self, url: str) -> bool:
+        from nexus import parse_nxm
+        parsed = parse_nxm(url)
+        if not parsed:
+            return GLib.SOURCE_REMOVE
+
+        slug = find_game_by_nexus_domain(parsed.get("game_domain", ""))
+        if slug:
+            for row in self._iter_game_rows():
+                if getattr(row, "_slug", None) == slug:
+                    self.games_list.select_row(row)
+                    break
+            self._select_game(slug)
+
+        api_key = get_nexus_api_key()
+        if not api_key:
+            self._show_nxm_api_key_hint()
+            return GLib.SOURCE_REMOVE
+
+        self._do_nxm_import(url, api_key)
+        return GLib.SOURCE_REMOVE
+
+    def _show_nxm_api_key_hint(self) -> None:
+        dialog = Adw.MessageDialog(
+            transient_for=self,
+            heading="Nexus API Key Required",
+            body=(
+                "A Nexus API key is required to use Mod Manager Download links.\n"
+                "Get it at nexusmods.com → Account → API Keys.\n\n"
+                "After saving, click Mod Manager Download in your browser again."
+            ),
+        )
+        entry = Gtk.Entry()
+        entry.set_placeholder_text("Your Nexus API key")
+        entry.set_activates_default(True)
+        dialog.set_extra_child(entry)
+        dialog.add_response("cancel", "Cancel")
+        dialog.add_response("save", "Save Key")
+        dialog.set_response_appearance("save", Adw.ResponseAppearance.SUGGESTED)
+        dialog.set_default_response("save")
+        dialog.set_close_response("cancel")
+
+        def _on_response(_dlg, response):
+            if response == "save":
+                key = entry.get_text().strip()
+                if key:
+                    save_nexus_api_key(key)
+
+        dialog.connect("response", _on_response)
+        dialog.present()
 
     def _on_nxm_import(self, _btn):
         if not self.engine:

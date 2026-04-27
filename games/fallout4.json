@@ -4,6 +4,7 @@
   "engine": "bethesda",
   "game_exe": "Fallout4.exe",
   "install_subdir": "Fallout 4",
+  "nexus_domain": "fallout4",
   "script_extender": {
     "name": "F4SE",
     "loader_exe": "f4se_loader.exe",

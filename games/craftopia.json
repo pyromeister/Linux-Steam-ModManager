@@ -4,6 +4,7 @@
   "engine": "bepinex",
   "game_exe": "Craftopia.exe",
   "install_subdir": "Craftopia",
+  "nexus_domain": "craftopia",
   "proton": true,
   "bepinex": {
     "plugins_dir": "BepInEx/plugins",

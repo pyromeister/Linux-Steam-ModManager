@@ -4,6 +4,7 @@
   "engine": "modfolder",
   "game_exe": "StardewValley",
   "install_subdir": "Stardew Valley",
+  "nexus_domain": "stardewvalley",
   "modfolder": {
     "mods_dir": "Mods"
   }

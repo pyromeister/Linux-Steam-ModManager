@@ -4,6 +4,7 @@
   "engine": "bethesda",
   "game_exe": "SkyrimSE.exe",
   "install_subdir": "Skyrim Special Edition",
+  "nexus_domain": "skyrimspecialedition",
   "script_extender": {
     "name": "SKSE",
     "loader_exe": "skse64_loader.exe",

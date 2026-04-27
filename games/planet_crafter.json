@@ -4,6 +4,7 @@
   "engine": "bepinex",
   "game_exe": "Planet Crafter.exe",
   "install_subdir": "The Planet Crafter",
+  "nexus_domain": "theplanetcrafter",
   "proton": true,
   "bepinex": {
     "plugins_dir": "BepInEx/plugins",

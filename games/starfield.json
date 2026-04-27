@@ -4,6 +4,7 @@
   "engine": "bethesda",
   "game_exe": "Starfield.exe",
   "install_subdir": "Starfield",
+  "nexus_domain": "starfield",
   "script_extender": {
     "name": "SFSE",
     "loader_exe": "sfse_loader.exe",

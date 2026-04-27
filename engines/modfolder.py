@@ -67,10 +67,12 @@ class ModFolderEngine(BaseEngine):
 
             tops = [p for p in tmp.iterdir()]
             if len(tops) == 1 and tops[0].is_dir():
-                # Single top-level folder — install it directly into mods_dir,
-                # using mod_name as the folder name if provided
+                # Single top-level folder — use the folder's real name as the
+                # manifest key so list_mods() shows the mod name, not the archive filename.
                 src_root = tops[0]
-                dest = self.mods_dir / (mod_name or tops[0].name)
+                folder_name = mod_name or tops[0].name
+                dest = self.mods_dir / folder_name
+                name = folder_name
             else:
                 # Multiple entries — bundle everything into a named subfolder
                 src_root = tmp
@@ -134,6 +136,7 @@ class ModFolderEngine(BaseEngine):
         manifest = load_manifest()
         result = []
         tracked_names: set[str] = set()
+        tracked_dirs: set[str] = set()
 
         for mod_name, entry in manifest.items():
             if entry.get("game") not in (None, game_slug):
@@ -144,6 +147,15 @@ class ModFolderEngine(BaseEngine):
                 for f in files
             )
             tracked_names.add(mod_name)
+            # Collect top-level installed dir names so the directory scan
+            # doesn't show them as untracked duplicates.
+            for f_str in files:
+                try:
+                    rel = Path(f_str).relative_to(self.mods_dir)
+                    if rel.parts:
+                        tracked_dirs.add(rel.parts[0].removesuffix(".disabled"))
+                except ValueError:
+                    pass
             result.append({"name": mod_name, "active": active, "kind": "mod"})
 
         # Show untracked subdirectories in mods_dir
@@ -153,7 +165,7 @@ class ModFolderEngine(BaseEngine):
                     continue
                 is_disabled = d.name.endswith(".disabled")
                 base_name = d.name.removesuffix(".disabled")
-                if base_name not in tracked_names:
+                if base_name not in tracked_names and base_name not in tracked_dirs:
                     result.append({
                         "name": base_name,
                         "active": not is_disabled,
