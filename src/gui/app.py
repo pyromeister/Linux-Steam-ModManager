@@ -1520,10 +1520,11 @@ class ModManagerWindow(Adw.ApplicationWindow):
         self.setup_btn.set_sensitive(True)
         if getattr(self.engine, "has_framework_setup", False):
             installed = self.engine.is_framework_installed()
-            self.setup_btn.set_label("BepInEx ✓" if installed else "Install BepInEx")
+            fw = getattr(self.engine, "framework_name", "BepInEx")
+            self.setup_btn.set_label(f"{fw} ✓" if installed else f"Install {fw}")
             self.setup_btn.set_tooltip_text(
-                "BepInEx is installed" if installed
-                else "Download and install BepInEx into the game folder"
+                f"{fw} is installed" if installed
+                else f"Download and install {fw} into the game folder"
             )
         elif self.engine.has_script_extender:
             self.setup_btn.set_label("Setup SE")
@@ -1541,18 +1542,18 @@ class ModManagerWindow(Adw.ApplicationWindow):
             self._on_setup_se(None)
 
     def _on_setup_bepinex(self):
+        fw = getattr(self.engine, "framework_name", "BepInEx")
         if self.engine.is_framework_installed():
-            # Already installed — show launch setup dialog instead
             self._show_bepinex_launch_dialog()
             return
 
         dialog = Adw.MessageDialog(
             transient_for=self,
-            heading="Install BepInEx",
+            heading=f"Install {fw}",
             body=(
-                "The latest BepInEx release will be downloaded from GitHub "
+                f"The latest {fw} release will be downloaded from GitHub "
                 f"and extracted to:\n<tt>{GLib.markup_escape_text(str(self.engine.game_root))}</tt>\n\n"
-                "BepInEx is required for mods to work in this game."
+                f"{fw} is required for mods to work in this game."
             ),
         )
         dialog.set_body_use_markup(True)
@@ -1577,12 +1578,13 @@ class ModManagerWindow(Adw.ApplicationWindow):
         except Exception:
             pass
 
+        fw = getattr(self.engine, "framework_name", "BepInEx")
         clipboard_note = "\nCopied to clipboard." if copied else ""
         dialog = Adw.MessageDialog(
             transient_for=self,
-            heading="BepInEx Launch Setup",
+            heading=f"{fw} Launch Setup",
             body=(
-                "BepInEx is installed. To activate mods, set this as your "
+                f"{fw} is installed. To activate mods, set this as your "
                 "<b>Steam Launch Option</b> "
                 "(right-click game → Properties → General):\n\n"
                 f"<tt>{GLib.markup_escape_text(launch_option)}</tt>"

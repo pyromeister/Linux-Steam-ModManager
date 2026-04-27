@@ -38,7 +38,8 @@ class BepInExEngine(BaseEngine):
     has_load_order = False
     has_script_extender = False
     has_activation_toggle = True
-    has_framework_setup = True  # supports automatic BepInEx download + install
+    has_framework_setup = True
+    framework_name = "BepInEx"
 
     def __init__(self, profile: dict):
         super().__init__(profile)

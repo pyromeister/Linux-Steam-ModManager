@@ -7,5 +7,12 @@
   "nexus_domain": "stardewvalley",
   "modfolder": {
     "mods_dir": "Mods"
+  },
+  "smapi": {
+    "executable": "StardewModdingAPI",
+    "github_repo": "Pathoschild/SMAPI",
+    "asset_name": "installer.zip",
+    "installer_subdir": "internal/linux",
+    "install_dat": "install.dat"
   }
 }

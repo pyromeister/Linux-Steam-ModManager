@@ -5,8 +5,14 @@ Capabilities: install/uninstall, activation toggle (appends .disabled to files).
 No framework setup, no load order (handled by the game / mod loader itself).
 """
 
+import io
+import json
 import shutil
+import stat
 import sys
+import urllib.error
+import urllib.request
+import zipfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
@@ -25,11 +31,111 @@ from installer import (
 )
 
 
+USER_AGENT = "linux-mod-manager/1.0"
+GITHUB_API = "https://api.github.com/repos"
+
+
 class ModFolderEngine(BaseEngine):
     has_load_order = False
     has_script_extender = False
     has_activation_toggle = True
-    has_framework_setup = False
+
+    @property
+    def framework_name(self) -> str:
+        return "SMAPI"
+
+    @property
+    def has_framework_setup(self) -> bool:
+        return bool(self.profile.get("smapi"))
+
+    def is_framework_installed(self) -> bool:
+        smapi = self.profile.get("smapi", {})
+        exe = smapi.get("executable", "StardewModdingAPI")
+        return (self.game_root / exe).exists()
+
+    def setup_launch(self) -> str:
+        if not self.is_framework_installed():
+            raise RuntimeError("SMAPI not installed — install it first")
+        smapi = self.profile.get("smapi", {})
+        exe = smapi.get("executable", "StardewModdingAPI")
+        path = self.game_root / exe
+        mode = path.stat().st_mode
+        path.chmod(mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+        return f'"{path}" %command%'
+
+    def setup_framework(self, on_progress=None) -> str:
+        smapi = self.profile.get("smapi", {})
+        repo = smapi["github_repo"]
+        asset_name = smapi["asset_name"]
+        installer_subdir = smapi["installer_subdir"]
+        install_dat = smapi["install_dat"]
+        exe = smapi.get("executable", "StardewModdingAPI")
+
+        req = urllib.request.Request(
+            f"{GITHUB_API}/{repo}/releases/latest",
+            headers={"User-Agent": USER_AGENT, "Accept": "application/vnd.github+json"},
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            release = json.loads(resp.read())
+        version = release["tag_name"]
+
+        asset = next(
+            (a for a in release["assets"]
+             if asset_name in a["name"] and "double" not in a["name"]),
+            None,
+        )
+        if not asset:
+            raise RuntimeError(f"No SMAPI installer asset found in release {version}")
+
+        tmp_zip = Path("/tmp/smapi_installer.zip")
+        dl_req = urllib.request.Request(
+            asset["browser_download_url"],
+            headers={"User-Agent": USER_AGENT},
+        )
+        with urllib.request.urlopen(dl_req, timeout=120) as resp:
+            total = int(resp.headers.get("Content-Length", 0))
+            downloaded = 0
+            with tmp_zip.open("wb") as f:
+                while True:
+                    chunk = resp.read(65536)
+                    if not chunk:
+                        break
+                    f.write(chunk)
+                    downloaded += len(chunk)
+                    if on_progress:
+                        on_progress(downloaded, total)
+
+        with zipfile.ZipFile(tmp_zip) as outer:
+            dat_path = next(
+                m for m in outer.namelist()
+                if m.endswith(f"{installer_subdir}/{install_dat}")
+            )
+            inner_bytes = outer.read(dat_path)
+
+        self.game_root.mkdir(parents=True, exist_ok=True)
+        installed_files = []
+        with zipfile.ZipFile(io.BytesIO(inner_bytes)) as inner:
+            for member in inner.namelist():
+                if member.endswith("/"):
+                    continue
+                dest = self.game_root / member
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                dest.write_bytes(inner.read(member))
+                installed_files.append(dest)
+
+        exe_path = self.game_root / exe
+        if exe_path.exists():
+            exe_path.chmod(exe_path.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+
+        record_install(
+            "SMAPI",
+            tmp_zip,
+            installed_files,
+            game_slug=self.profile.get("slug"),
+            nexus_meta={"source": "github", "version": version},
+        )
+        tmp_zip.unlink(missing_ok=True)
+        return version
 
     def __init__(self, profile: dict):
         super().__init__(profile)
