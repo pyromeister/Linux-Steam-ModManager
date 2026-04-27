@@ -132,6 +132,16 @@ class ModFolderEngine(BaseEngine):
                 if p.exists():
                     p.chmod(p.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
 
+        # SMAPI's install.dat doesn't include StardewModdingAPI.deps.json — the
+        # official installer generates it by copying the game's deps file. Without
+        # it the dotnet apphost falls into split/FX mode and shows help text instead
+        # of launching. Copy game deps.json so the host can resolve assemblies.
+        game_deps = self.game_root / "Stardew Valley.deps.json"
+        smapi_deps = self.game_root / f"{exe}.deps.json"
+        if game_deps.exists() and not smapi_deps.exists():
+            shutil.copy2(game_deps, smapi_deps)
+            installed_files.append(smapi_deps)
+
         record_install(
             "SMAPI",
             tmp_zip,

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **SMAPI launch after auto-install** — `StardewModdingAPI.deps.json` was missing after `setup_framework()` extracted `install.dat`. The dotnet apphost fell into split/FX mode and showed help text instead of launching. Fix: copy `Stardew Valley.deps.json` to `StardewModdingAPI.deps.json` post-extraction so the host can resolve assemblies correctly.
+
 ## [0.1.0-alpha] - 2026-04-21
 
 ### Added
