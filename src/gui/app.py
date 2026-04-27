@@ -917,10 +917,13 @@ class ModManagerWindow(Adw.ApplicationWindow):
 
     def _handle_startup_nxm(self, url: str) -> bool:
         from nexus import parse_nxm
+        self._toast(f"NXM received: {url[:60]}…")
         parsed = parse_nxm(url)
         if not parsed:
+            self._toast(f"NXM parse failed — URL: {url[:80]}")
             return GLib.SOURCE_REMOVE
 
+        self._toast(f"NXM parsed: {parsed.get('game_domain')} mod {parsed.get('mod_id')}")
         slug = find_game_by_nexus_domain(parsed.get("game_domain", ""))
         if slug:
             for row in self._iter_game_rows():
@@ -928,6 +931,8 @@ class ModManagerWindow(Adw.ApplicationWindow):
                     self.games_list.select_row(row)
                     break
             self._select_game(slug)
+        else:
+            self._toast(f"No profile for domain: {parsed.get('game_domain')}")
 
         api_key = get_nexus_api_key()
         if not api_key:
