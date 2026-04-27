@@ -1,0 +1,10 @@
+{
+  "name": "Stardew Valley",
+  "steam_app_id": "413150",
+  "engine": "modfolder",
+  "game_exe": "StardewValley",
+  "install_subdir": "Stardew Valley",
+  "modfolder": {
+    "mods_dir": "Mods"
+  }
+}

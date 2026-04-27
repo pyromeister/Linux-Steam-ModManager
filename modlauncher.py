@@ -38,6 +38,9 @@ def load_engine(game: str):
     if engine_name == "bepinex":
         from bepinex import BepInExEngine
         return BepInExEngine(profile)
+    if engine_name == "modfolder":
+        from modfolder import ModFolderEngine
+        return ModFolderEngine(profile)
     print(f"Engine '{engine_name}' not yet implemented.")
     sys.exit(1)
 

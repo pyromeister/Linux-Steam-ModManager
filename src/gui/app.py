@@ -45,6 +45,9 @@ def load_engine(game: str):
     if engine_name == "rimworld":
         from rimworld import RimWorldEngine
         return RimWorldEngine(profile)
+    if engine_name == "modfolder":
+        from modfolder import ModFolderEngine
+        return ModFolderEngine(profile)
     raise ValueError(f"Engine '{engine_name}' not yet implemented")
 
 
