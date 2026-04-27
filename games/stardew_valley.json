@@ -10,6 +10,7 @@
   },
   "smapi": {
     "executable": "StardewModdingAPI",
+    "launch_script": "unix-launcher.sh",
     "github_repo": "Pathoschild/SMAPI",
     "asset_name": "installer.zip",
     "installer_subdir": "internal/linux",

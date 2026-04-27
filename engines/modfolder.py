@@ -57,10 +57,11 @@ class ModFolderEngine(BaseEngine):
         if not self.is_framework_installed():
             raise RuntimeError("SMAPI not installed — install it first")
         smapi = self.profile.get("smapi", {})
-        exe = smapi.get("executable", "StardewModdingAPI")
-        path = self.game_root / exe
-        mode = path.stat().st_mode
-        path.chmod(mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+        launch = smapi.get("launch_script") or smapi.get("executable", "StardewModdingAPI")
+        path = self.game_root / launch
+        if not path.exists():
+            raise RuntimeError(f"{launch} not found — reinstall SMAPI")
+        path.chmod(path.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
         return f'"{path}" %command%'
 
     def setup_framework(self, on_progress=None) -> str:
@@ -123,9 +124,11 @@ class ModFolderEngine(BaseEngine):
                 dest.write_bytes(inner.read(member))
                 installed_files.append(dest)
 
-        exe_path = self.game_root / exe
-        if exe_path.exists():
-            exe_path.chmod(exe_path.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+        for make_exec in [exe, smapi.get("launch_script", "")]:
+            if make_exec:
+                p = self.game_root / make_exec
+                if p.exists():
+                    p.chmod(p.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
 
         record_install(
             "SMAPI",
