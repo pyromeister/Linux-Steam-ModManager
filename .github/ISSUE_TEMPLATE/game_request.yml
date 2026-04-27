@@ -1,0 +1,51 @@
+name: Game Request
+description: Request support for a new game
+title: "[Game Request]: "
+labels: ["game-request"]
+body:
+  - type: input
+    attributes:
+      label: Game name
+      placeholder: "e.g. Cyberpunk 2077"
+    validations:
+      required: true
+
+  - type: input
+    attributes:
+      label: Steam App ID
+      description: Found in the Steam store URL — steamcommunity.com/app/**XXXXXX**
+      placeholder: "e.g. 1091500"
+    validations:
+      required: true
+
+  - type: dropdown
+    attributes:
+      label: Mod format
+      description: How are mods typically installed for this game?
+      options:
+        - Data/ folder (Bethesda-style)
+        - BepInEx plugins
+        - Custom folder structure
+        - Nexus / Vortex managed
+        - Other / not sure
+    validations:
+      required: true
+
+  - type: input
+    attributes:
+      label: Script extender (if any)
+      description: Leave blank if none
+      placeholder: "e.g. Cyber Engine Tweaks, Redscript"
+
+  - type: input
+    attributes:
+      label: Nexus Mods page
+      description: Does this game have a Nexus Mods section? Link it if so.
+      placeholder: "https://www.nexusmods.com/..."
+
+  - type: textarea
+    attributes:
+      label: Why would you like to see this game supported?
+      placeholder: "It's popular on Linux, I play it a lot, there's no good native mod manager..."
+    validations:
+      required: true

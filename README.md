@@ -84,112 +84,23 @@ No pip dependencies — standard library only (GUI requires system GTK4 packages
 ## Usage — CLI
 
 ```bash
-# List installed mods and current load order
 python3 modlauncher.py --game starfield list
-
-# Install a mod from an archive
 python3 modlauncher.py --game starfield install ~/Downloads/SomeMod.zip
-
-# Install with a custom name
-python3 modlauncher.py --game starfield install ~/Downloads/SomeMod.zip MyModName
-
-# Uninstall a mod (removes all tracked files, restores any backups)
 python3 modlauncher.py --game starfield uninstall MyModName
-
-# Enable / disable a mod
-python3 modlauncher.py --game starfield enable MyModName
-python3 modlauncher.py --game starfield disable MyModName
-
-# Show load order
-python3 modlauncher.py --game starfield order
-
-# Set up the script extender launch wrapper (run once)
-python3 modlauncher.py --game starfield setup-se
-
-# Verify all paths are correct
-python3 modlauncher.py --game starfield check
-
-# List all supported games
 python3 modlauncher.py games
 ```
 
----
-
-## Managed directories
-
-The manager keeps its data under `~/.local/share/linux-mod-manager/`:
-
-```
-~/.local/share/linux-mod-manager/
-├── archives/
-│   └── starfield/          ← cached copy of every installed archive
-│       ├── SomeMod.zip
-│       └── AnotherMod.7z
-└── backups/
-    └── starfield/
-        └── SomeMod/        ← files overwritten by SomeMod, restored on uninstall
-            └── Data/
-                └── Interface/
-                    └── somefile.swf
-```
+Full command reference: [CLI Reference](https://github.com/pyromeister/Linux-Steam-ModManager/wiki/CLI-Reference)
 
 ---
 
 ## Supported Games
 
-| Profile | Game | Engine | Script Extender |
-|---------|------|--------|-----------------|
-| `starfield` | Starfield | Bethesda | SFSE |
-| `skyrim_se` | Skyrim Special Edition | Bethesda | SKSE |
-| `planet_crafter` | The Planet Crafter | BepInEx | BepInEx *(auto-installed via "Install BepInEx" button)* |
-| `fallout4` *(planned)* | Fallout 4 | Bethesda | F4SE |
-| `rimworld` *(planned)* | RimWorld | RimWorld | — |
-| `witcher3` *(planned)* | The Witcher 3 | Witcher3 | — |
+Starfield, Skyrim SE, The Planet Crafter — more planned.
 
----
+Full list with engine and script extender details: [Supported Games](https://github.com/pyromeister/Linux-Steam-ModManager/wiki/Supported-Games)
 
-## Project Structure
-
-```
-linux-mod-manager/
-├── modlauncher.py       # CLI entry point
-├── modlauncher-gui.py   # GUI entry point (GTK4 + libadwaita)
-├── engines/
-│   ├── base.py          # Abstract BaseEngine with capability flags
-│   └── bethesda.py      # Bethesda engine (Starfield, Skyrim, Fallout)
-├── games/
-│   ├── starfield.json   # Game profile
-│   └── skyrim_se.json
-└── src/
-    ├── config.py        # Path resolver, Steam detection, managed dir constants
-    ├── installer.py     # Archive extraction, structure detection, manifest, cache, backups
-    ├── plugins.py       # Plugins.txt read/write/reorder
-    └── gui/
-        └── app.py       # GTK4 window, mod list, load order panel
-```
-
-### Adding a new game
-
-1. Create `games/yourgame.json` with the game's Steam App ID, install path, and script extender info
-2. If the game uses a different mod system, create `engines/yourgame.py` extending `BaseEngine`
-3. Register the engine name in `modlauncher.py`'s `load_engine()` and in `src/gui/app.py`'s `load_engine()`
-
----
-
-## How the Bethesda engine works on Linux
-
-Bethesda games run via Proton. Launching the script extender (SFSE/SKSE) requires a small
-wrapper script — you can't just put the `.exe` path in Steam's launch options because Steam
-will try to run it natively instead of through Proton.
-
-`setup-se` generates this script automatically:
-
-```bash
-#!/bin/bash
-exec "${@/Starfield.exe/sfse_loader.exe}"
-```
-
-Set Steam launch options to: `"/path/to/se_launch.sh" %command%`
+Want a game added? [Open a Game Request](https://github.com/pyromeister/Linux-Steam-ModManager/issues/new?template=game_request.yml)
 
 ---
 
@@ -197,6 +108,8 @@ Set Steam launch options to: `"/path/to/se_launch.sh" %command%`
 
 Contributions welcome — especially engine plugins for new games.
 Open an issue before starting large changes.
+
+Wiki for contributors: [Project Structure](https://github.com/pyromeister/Linux-Steam-ModManager/wiki/Project-Structure) · [Adding a New Game](https://github.com/pyromeister/Linux-Steam-ModManager/wiki/Adding-a-New-Game) · [Bethesda Engine Internals](https://github.com/pyromeister/Linux-Steam-ModManager/wiki/Bethesda-Engine-Internals)
 
 ---
 
