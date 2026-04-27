@@ -62,7 +62,9 @@ class ModFolderEngine(BaseEngine):
         if not path.exists():
             raise RuntimeError(f"{launch} not found — reinstall SMAPI")
         path.chmod(path.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
-        return f'"{path}" %command%'
+        # SMAPI_USE_CURRENT_SHELL: run SMAPI in Steam's process instead of
+        # opening a new terminal window, so Steam tracks the game correctly.
+        return f'SMAPI_USE_CURRENT_SHELL=true "{path}" %command%'
 
     def setup_framework(self, on_progress=None) -> str:
         smapi = self.profile.get("smapi", {})
