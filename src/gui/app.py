@@ -1544,4 +1544,4 @@ class ModManagerApp(Adw.Application):
 
 def main():
     app = ModManagerApp()
-    app.run(sys.argv)
+    app.run([sys.argv[0]])
