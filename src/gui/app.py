@@ -1521,12 +1521,11 @@ class ModManagerApp(Adw.Application):
     def __init__(self):
         super().__init__(
             application_id="io.github.linuxmodmanager",
-            flags=Gio.ApplicationFlags.HANDLES_COMMAND_LINE,
+            flags=Gio.ApplicationFlags.NON_UNIQUE,
         )
         self.connect("activate", self._on_activate)
-        self.connect("command-line", self._on_command_line)
 
-    def _setup_display(self):
+    def _on_activate(self, app):
         try:
             settings = Gtk.Settings.get_default()
             if settings is not None:
@@ -1538,35 +1537,9 @@ class ModManagerApp(Adw.Application):
         if assets_dir.exists():
             display = Gdk.Display.get_default()
             Gtk.IconTheme.get_for_display(display).add_search_path(str(assets_dir))
-
-    def _get_or_create_window(self) -> ModManagerWindow:
-        win = self.get_active_window()
-        if win is None:
-            self._setup_display()
-            win = ModManagerWindow(self)
-            win.set_icon_name("lsmm")
-        return win
-
-    def _on_activate(self, app):
-        win = self._get_or_create_window()
+        win = ModManagerWindow(app)
+        win.set_icon_name("lsmm")
         win.present()
-
-    def _on_command_line(self, app, command_line):
-        args = command_line.get_arguments()
-        nxm_url = next((a for a in args[1:] if a.lower().startswith("nxm://")), None)
-
-        fresh = self.get_active_window() is None
-        win = self._get_or_create_window()
-        win.present()
-
-        if nxm_url:
-            if fresh:
-                win._pending_nxm = nxm_url
-            else:
-                GLib.idle_add(win._handle_startup_nxm, nxm_url)
-
-        command_line.set_exit_status(0)
-        return 0
 
 
 def main():
