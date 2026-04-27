@@ -118,6 +118,64 @@ def fetch_collection(slug: str, api_key: str) -> dict | None:
         return None
 
 
+def fetch_collection_graphql(slug: str, api_key: str) -> dict | None:
+    url = "https://api.nexusmods.com/v2/graphql"
+    headers = {
+        "apikey": api_key,
+        "User-Agent": USER_AGENT,
+        "Content-Type": "application/json",
+    }
+    query = {
+        "query": """
+        {
+            collection(slug: "%s") {
+                name
+                game { domainName }
+                latestPublishedRevision {
+                    modFiles {
+                        optional
+                        fileId
+                        file {
+                            modId
+                            mod { name }
+                        }
+                    }
+                }
+            }
+        }
+        """ % slug
+    }
+    try:
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(query).encode(),
+            headers=headers,
+        )
+        with urllib.request.urlopen(req) as resp:
+            response = json.loads(resp.read())
+    except Exception:
+        return None
+
+    collection_data = response.get("data", {}).get("collection")
+    if not collection_data:
+        return None
+
+    mods = []
+    for mod_file in collection_data["latestPublishedRevision"]["modFiles"]:
+        mods.append({
+            "optional": mod_file["optional"],
+            "file_id": mod_file["fileId"],
+            "mod_id": mod_file["file"]["modId"],
+            "name": mod_file["file"]["mod"]["name"],
+        })
+
+    return {
+        "name": collection_data["name"],
+        "game_domain": collection_data["game"]["domainName"],
+        "mods": mods,
+    }
+
+
 def download_file(url: str, dest: Path, on_progress=None) -> None:
     """
     Download URL to dest. Calls on_progress(downloaded_bytes, total_bytes) if given.

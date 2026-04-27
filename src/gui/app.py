@@ -1239,6 +1239,15 @@ class ModManagerWindow(Adw.ApplicationWindow):
             btn_row.append(del_btn)
             box.append(btn_row)
 
+            def do_check_mods(_btn):
+                name = profile_names[dropdown.get_selected()]
+                popover.popdown()
+                self._show_collection_mods_dialog(name, slug)
+
+            check_btn = Gtk.Button(label="Check Mods")
+            check_btn.connect("clicked", do_check_mods)
+            box.append(check_btn)
+
         # ── Import modpack section ──
         sep2 = Gtk.Separator()
         sep2.set_margin_top(4)
@@ -1283,33 +1292,107 @@ class ModManagerWindow(Adw.ApplicationWindow):
 
         def run():
             collection_name = collection_slug
+            collection_mods = None
+            game_domain = None
             if api_key:
-                from nexus import fetch_collection
-                info = fetch_collection(collection_slug, api_key)
-                if info and isinstance(info, dict):
+                from nexus import fetch_collection_graphql
+                info = fetch_collection_graphql(collection_slug, api_key)
+                if info:
                     collection_name = info.get("name") or collection_slug
+                    collection_mods = info.get("mods")
+                    game_domain = info.get("game_domain")
 
             import profiles as prof
-            prof.save(slug, collection_name, [], [])
-            GLib.idle_add(self._show_collection_import_dialog, collection_name)
+            prof.save(slug, collection_name, [], [],
+                      collection_mods=collection_mods,
+                      collection_game_domain=game_domain)
+            mod_count = len(collection_mods) if collection_mods else 0
+            GLib.idle_add(self._show_collection_import_dialog, collection_name, mod_count)
 
         threading.Thread(target=run, daemon=True).start()
 
-    def _show_collection_import_dialog(self, name: str):
+    def _show_collection_import_dialog(self, name: str, mod_count: int = 0):
+        count_text = f" ({mod_count} mods)" if mod_count else ""
         dialog = Adw.MessageDialog(
             transient_for=self,
             heading="Modpack Profile Created",
             body=(
-                f"Profile <b>{GLib.markup_escape_text(name)}</b> has been saved.\n\n"
+                f"Profile <b>{GLib.markup_escape_text(name)}</b>{GLib.markup_escape_text(count_text)} has been saved.\n\n"
                 "Nexus Mods requires downloading each mod individually. "
-                "Install the mods from the collection via <b>+ Install</b> or <b>NXM URL</b>, "
-                "then load this profile to activate them all at once."
+                "Install the mods via <b>NXM links</b> on the collection page, "
+                "then use <b>Profiles/Modpacks → Check Mods</b> to see what's still missing."
             ),
         )
         dialog.set_body_use_markup(True)
         dialog.add_response("ok", "OK")
         dialog.set_default_response("ok")
         dialog.present()
+
+    def _show_collection_mods_dialog(self, profile_name: str, game_slug: str):
+        import profiles as prof
+        profile_data = prof.get(game_slug, profile_name) or {}
+        collection_mods = profile_data.get("collection_mods", [])
+        game_domain = profile_data.get("collection_game_domain", "")
+
+        if not collection_mods:
+            msg = Adw.MessageDialog(
+                transient_for=self,
+                heading="No mod list",
+                body="This profile has no collection mod list. Re-import the collection URL to fetch it.",
+            )
+            msg.add_response("ok", "OK")
+            msg.present()
+            return
+
+        win = Adw.Window(transient_for=self, modal=True)
+        win.set_title(f"{profile_name} — Mod List ({len(collection_mods)} mods)")
+        win.set_default_size(520, 620)
+
+        toolbar_view = Adw.ToolbarView()
+        toolbar_view.add_top_bar(Adw.HeaderBar())
+
+        listbox = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
+        listbox.add_css_class("boxed-list")
+        listbox.set_margin_start(12)
+        listbox.set_margin_end(12)
+        listbox.set_margin_top(12)
+        listbox.set_margin_bottom(12)
+
+        for mod in sorted(collection_mods, key=lambda m: m["name"].lower()):
+            row_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            row_box.set_margin_start(8)
+            row_box.set_margin_end(8)
+            row_box.set_margin_top(6)
+            row_box.set_margin_bottom(6)
+
+            name_label = Gtk.Label(label=mod["name"])
+            name_label.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
+            name_label.set_hexpand(True)
+            name_label.set_xalign(0)
+            row_box.append(name_label)
+
+            if mod.get("optional"):
+                opt_label = Gtk.Label(label="optional")
+                opt_label.add_css_class("dim-label")
+                opt_label.add_css_class("caption")
+                row_box.append(opt_label)
+
+            if game_domain:
+                uri = f"https://www.nexusmods.com/{game_domain}/mods/{mod['mod_id']}"
+                link_btn = Gtk.LinkButton(uri=uri, label="Open")
+                link_btn.set_valign(Gtk.Align.CENTER)
+                row_box.append(link_btn)
+
+            row = Gtk.ListBoxRow()
+            row.set_child(row_box)
+            listbox.append(row)
+
+        scroll = Gtk.ScrolledWindow()
+        scroll.set_child(listbox)
+        scroll.set_vexpand(True)
+        toolbar_view.set_content(scroll)
+        win.set_content(toolbar_view)
+        win.present()
 
     def _apply_profile(self, slug: str, name: str):
         import profiles as prof

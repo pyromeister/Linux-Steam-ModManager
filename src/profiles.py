@@ -30,9 +30,16 @@ def _save_all(game_slug: str, profiles: dict) -> None:
     p.write_text(json.dumps(profiles, indent=2))
 
 
-def save(game_slug: str, name: str, active_mods: list[str], load_order: list[str]) -> None:
+def save(game_slug: str, name: str, active_mods: list[str], load_order: list[str],
+         collection_mods: list[dict] | None = None,
+         collection_game_domain: str | None = None) -> None:
     profiles = load_all(game_slug)
-    profiles[name] = {"active_mods": active_mods, "load_order": load_order}
+    entry = {"active_mods": active_mods, "load_order": load_order}
+    if collection_mods is not None:
+        entry["collection_mods"] = collection_mods
+    if collection_game_domain is not None:
+        entry["collection_game_domain"] = collection_game_domain
+    profiles[name] = entry
     _save_all(game_slug, profiles)
 
 
@@ -45,3 +52,7 @@ def delete(game_slug: str, name: str) -> None:
 
 def get(game_slug: str, name: str) -> dict | None:
     return load_all(game_slug).get(name)
+
+
+def get_collection_mods(game_slug: str, name: str) -> list[dict]:
+    return load_all(game_slug).get(name, {}).get("collection_mods", [])
