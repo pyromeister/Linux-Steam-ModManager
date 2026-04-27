@@ -1236,9 +1236,26 @@ class ModManagerWindow(Adw.ApplicationWindow):
                 self._toast(f"Deleted profile: {name}")
                 popover.popdown()
 
+            def do_update(_btn):
+                name = profile_names[dropdown.get_selected()]
+                active = [m["name"] for m in self.engine.list_mods() if m["active"]]
+                order = self.engine.get_load_order() if self.engine.has_load_order else []
+                existing = prof.get(slug, name) or {}
+                prof.save(slug, name, active, order,
+                          collection_mods=existing.get("collection_mods"),
+                          collection_game_domain=existing.get("collection_game_domain"))
+                self._toast(f"Saved: {name}")
+                popover.popdown()
+
+            update_btn = Gtk.Button(label="Save")
+            update_btn.add_css_class("suggested-action")
+            update_btn.set_hexpand(True)
+
             load_btn.connect("clicked", do_load)
             del_btn.connect("clicked", do_delete)
+            update_btn.connect("clicked", do_update)
             btn_row.append(load_btn)
+            btn_row.append(update_btn)
             btn_row.append(del_btn)
             box.append(btn_row)
 
