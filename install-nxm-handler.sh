@@ -14,7 +14,7 @@ Name=Linux Steam ModManager
 Exec=python3 $SCRIPT_DIR/src/gui/app.py %u
 Type=Application
 MimeType=x-scheme-handler/nxm;
-NoDisplay=true
+NoDisplay=false
 StartupNotify=false
 EOF
 
