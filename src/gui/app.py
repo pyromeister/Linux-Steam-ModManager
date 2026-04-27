@@ -192,7 +192,9 @@ class ModManagerWindow(Adw.ApplicationWindow):
         self.games = available_games()
         self._installing = False
         self._game_slug = None
-        self._pending_nxm: str | None = None  # set by ModManagerApp._on_open
+        self._pending_nxm: str | None = next(
+            (a for a in sys.argv[1:] if a.lower().startswith("nxm://")), None
+        )
 
         self._build_ui()
         self._update_setup_btn()
@@ -1519,10 +1521,10 @@ class ModManagerApp(Adw.Application):
     def __init__(self):
         super().__init__(
             application_id="io.github.linuxmodmanager",
-            flags=Gio.ApplicationFlags.HANDLES_OPEN,
+            flags=Gio.ApplicationFlags.HANDLES_COMMAND_LINE,
         )
         self.connect("activate", self._on_activate)
-        self.connect("open", self._on_open)
+        self.connect("command-line", self._on_command_line)
 
     def _setup_display(self):
         try:
@@ -1549,13 +1551,9 @@ class ModManagerApp(Adw.Application):
         win = self._get_or_create_window()
         win.present()
 
-    def _on_open(self, app, files, n_files, hint):
-        nxm_url = None
-        for f in files:
-            uri = f.get_uri()
-            if uri.lower().startswith("nxm://"):
-                nxm_url = uri
-                break
+    def _on_command_line(self, app, command_line):
+        args = command_line.get_arguments()
+        nxm_url = next((a for a in args[1:] if a.lower().startswith("nxm://")), None)
 
         fresh = self.get_active_window() is None
         win = self._get_or_create_window()
@@ -1563,12 +1561,12 @@ class ModManagerApp(Adw.Application):
 
         if nxm_url:
             if fresh:
-                # Window just created — _init_steam_path not yet run; pending
-                # nxm is picked up there after games list is ready.
                 win._pending_nxm = nxm_url
             else:
-                # Already running — trigger download immediately.
                 GLib.idle_add(win._handle_startup_nxm, nxm_url)
+
+        command_line.set_exit_status(0)
+        return 0
 
 
 def main():
