@@ -57,6 +57,17 @@ fill that gap with a proper native tool.
 
 ---
 
+## Installation
+
+```bash
+git clone https://github.com/pyromeister/Linux-Steam-ModManager
+cd Linux-Steam-ModManager
+```
+
+No pip dependencies — standard library only (GUI requires system GTK4 packages, see Requirements).
+
+---
+
 ## Usage — GUI
 
 ```bash
@@ -67,17 +78,6 @@ Select your game from the dropdown. The load order panel appears automatically
 for games that support it (Bethesda games). Use **+ Install** to open a file
 chooser — you can select multiple archives at once and they will be installed
 sequentially.
-
----
-
-## Installation
-
-```bash
-git clone https://github.com/pyromeister/Linux-Steam-ModManager
-cd Linux-Steam-ModManager
-```
-
-No pip dependencies — standard library only (GUI requires system GTK4 packages, see Requirements).
 
 ---
 
