@@ -1320,7 +1320,8 @@ class ModManagerWindow(Adw.ApplicationWindow):
             transient_for=self,
             heading="Modpack Profile Created",
             body=(
-                f"Profile <b>{GLib.markup_escape_text(name)}</b>{GLib.markup_escape_text(count_text)} has been saved.\n\n"
+                f"Profile <b>{GLib.markup_escape_text(name)}</b>"
+                f"{GLib.markup_escape_text(count_text)} has been saved.\n\n"
                 "Nexus Mods requires downloading each mod individually. "
                 "Install the mods via <b>NXM links</b> on the collection page, "
                 "then use <b>Profiles/Modpacks → Check Mods</b> to see what's still missing."
