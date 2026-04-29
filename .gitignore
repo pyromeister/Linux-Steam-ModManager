@@ -37,6 +37,5 @@ scripts/
 Plans/
 Makefile
 
-# Dev-only docs (tracked docs like CHANGELOG.md are NOT listed here)
-docs/REVIEW_LOG.md
-docs/ARCHITECTURE.md
+# Dev-only docs folder (fully local, never in clone)
+docs/
