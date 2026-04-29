@@ -40,3 +40,4 @@ Makefile
 # Dev-only docs folder (fully local, never in clone)
 docs/
 lsmm-roadmap.md
+backup/

@@ -12,6 +12,7 @@ GAMES_DIR = Path(__file__).parent.parent / "games"
 APP_CONFIG_PATH = Path.home() / ".config/linux-mod-manager/config.json"
 ARCHIVES_DIR = Path.home() / ".local/share/linux-mod-manager/archives"
 BACKUPS_DIR = Path.home() / ".local/share/linux-mod-manager/backups"
+MANIFEST_PATH = Path.home() / ".local/share/linux-mod-manager/installed_mods.json"
 
 # Known Steam data dir locations, checked in order of preference
 _STEAM_CANDIDATES = [

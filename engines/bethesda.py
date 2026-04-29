@@ -24,6 +24,7 @@ from installer import (
     load_manifest,
     record_install,
     remove_from_manifest,
+    temp_extract_dir,
 )
 
 LAUNCH_SCRIPT_CONTENT = """\
@@ -59,8 +60,7 @@ class BethesdaEngine(BaseEngine):
         """
         name = mod_name or archive_path.stem
         game_slug = self.profile.get("slug")
-        tmp = Path(f"/tmp/linuxmm_{name}")
-        try:
+        with temp_extract_dir() as tmp:
             print(f"Extracting {archive_path.name}...")
             extract(archive_path, tmp)
 
@@ -85,8 +85,6 @@ class BethesdaEngine(BaseEngine):
             record_install(name, archive_path, installed, game_slug=game_slug,
                            archive_cache=archive_cache, backups=backups,
                            nexus_meta=nexus_meta)
-        finally:
-            shutil.rmtree(tmp, ignore_errors=True)
 
         print(f"✓ Installed: {name}")
         if plugins_added:

@@ -21,6 +21,7 @@ from installer import (
     load_manifest,
     record_install,
     remove_from_manifest,
+    temp_extract_dir,
 )
 
 MODSCONFIG_PATH = (
@@ -100,9 +101,7 @@ class RimWorldEngine(BaseEngine):
         """
         name = mod_name or archive_path.stem
         game_slug = self._game_slug()
-        tmp = Path(f"/tmp/linuxmm_rw_{name}")
-
-        try:
+        with temp_extract_dir() as tmp:
             extract(archive_path, tmp)
 
             # Find the actual mod root: either tmp itself or one subfolder inside
@@ -137,9 +136,6 @@ class RimWorldEngine(BaseEngine):
 
             self._activate_package(package_id)
             print(f"✓ Installed: {display_name} ({package_id})")
-
-        finally:
-            shutil.rmtree(tmp, ignore_errors=True)
 
     def _find_mod_root(self, extracted: Path) -> Path:
         """

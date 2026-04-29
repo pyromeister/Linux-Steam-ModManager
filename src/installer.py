@@ -8,12 +8,28 @@ Caches mod archives and backs up overwritten files for safe restore.
 import json
 import shutil
 import subprocess
+import tempfile
 import zipfile
+from contextlib import contextmanager
 from pathlib import Path
 
-from config import normalize_dir_name, ARCHIVES_DIR, BACKUPS_DIR
+from config import normalize_dir_name, ARCHIVES_DIR, BACKUPS_DIR, MANIFEST_PATH
 
-MANIFEST_PATH = Path(__file__).parent.parent / "installed_mods.json"
+_migration_done = False
+
+
+def _migrate_legacy_manifest() -> None:
+    global _migration_done
+    if _migration_done:
+        return
+    _migration_done = True
+    legacy = Path(__file__).parent.parent / "installed_mods.json"
+    if legacy.exists() and not MANIFEST_PATH.exists():
+        MANIFEST_PATH.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            shutil.move(legacy, MANIFEST_PATH)
+        except OSError:
+            pass  # migration failed; new path stays absent, caller gets empty manifest
 
 # Extensions that need a Plugins.txt entry (Bethesda engine)
 PLUGIN_EXTENSIONS = {".esm", ".esp", ".esl"}
@@ -27,6 +43,17 @@ class ConflictError(Exception):
         # conflicts: [(relative_path, owning_mod_name), ...]
         self.conflicts = conflicts
         super().__init__(f"{len(conflicts)} file conflict(s)")
+
+
+# ── Temp extraction directory ─────────────────────────────────────────────────
+
+@contextmanager
+def temp_extract_dir():
+    tmp = Path(tempfile.mkdtemp(prefix="lsmm_"))
+    try:
+        yield tmp
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 # ── Archive extraction ────────────────────────────────────────────────────────
@@ -277,12 +304,14 @@ def detect_and_install(
 # ── Manifest ─────────────────────────────────────────────────────────────────
 
 def load_manifest() -> dict:
+    _migrate_legacy_manifest()
     if MANIFEST_PATH.exists():
         return json.loads(MANIFEST_PATH.read_text())
     return {}
 
 
 def save_manifest(manifest: dict) -> None:
+    MANIFEST_PATH.parent.mkdir(parents=True, exist_ok=True)
     MANIFEST_PATH.write_text(json.dumps(manifest, indent=2))
 
 

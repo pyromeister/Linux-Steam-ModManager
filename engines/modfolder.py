@@ -28,6 +28,7 @@ from installer import (
     load_manifest,
     record_install,
     remove_from_manifest,
+    temp_extract_dir,
 )
 
 
@@ -181,8 +182,7 @@ class ModFolderEngine(BaseEngine):
     ) -> None:
         name = mod_name or archive_path.stem
         game_slug = self.profile.get("slug")
-        tmp = Path(f"/tmp/linuxmm_{name}")
-        try:
+        with temp_extract_dir() as tmp:
             print(f"Extracting {archive_path.name}...")
             extract(archive_path, tmp)
 
@@ -214,8 +214,6 @@ class ModFolderEngine(BaseEngine):
                 game_slug=game_slug, archive_cache=archive_cache,
                 backups=backups, nexus_meta=nexus_meta,
             )
-        finally:
-            shutil.rmtree(tmp, ignore_errors=True)
 
         print(f"✓ Installed: {name}")
 
