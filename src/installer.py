@@ -31,6 +31,7 @@ def _migrate_legacy_manifest() -> None:
         except OSError:
             pass  # migration failed; new path stays absent, caller gets empty manifest
 
+
 # Extensions that need a Plugins.txt entry (Bethesda engine)
 PLUGIN_EXTENSIONS = {".esm", ".esp", ".esl"}
 # DLL extension — used for root-level installs and SE plugin directories
