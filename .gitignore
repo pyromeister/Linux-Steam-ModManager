@@ -25,12 +25,18 @@ installed_mods.json
 .DS_Store
 Thumbs.db
 
-# Internal context file (dev notes, not for end users)
+# Dev-only files (local, never in clone)
+CLAUDE.md
 CONTEXT.md
-
-# Dev todo list
 TODO.md
-
-# Push / release notes draft
 push.md
 gitstructure.md
+
+# Dev-only folders (local, never in clone)
+scripts/
+Plans/
+Makefile
+
+# Dev-only docs (tracked docs like CHANGELOG.md are NOT listed here)
+docs/REVIEW_LOG.md
+docs/ARCHITECTURE.md
