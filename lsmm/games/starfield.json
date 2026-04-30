@@ -1,0 +1,13 @@
+{
+  "name": "Starfield",
+  "steam_app_id": "1716740",
+  "engine": "bethesda",
+  "game_exe": "Starfield.exe",
+  "install_subdir": "Starfield",
+  "nexus_domain": "starfield",
+  "script_extender": {
+    "name": "SFSE",
+    "loader_exe": "sfse_loader.exe",
+    "plugins_dir": "Data/SFSE/Plugins"
+  }
+}

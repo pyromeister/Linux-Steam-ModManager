@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lsmm"
+version = "0.1.1"
+description = "Native Linux mod manager for Steam games"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "GPL-3.0-or-later"}
+authors = [{name = "pyromeister"}]
+classifiers = [
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Topic :: Games/Entertainment",
+]
+
+[project.scripts]
+lsmm = "lsmm.cli:main"
+lsmm-gui = "lsmm.gui.app:main"
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "pytest-cov", "flake8"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["lsmm*"]
+
+[tool.setuptools.package-data]
+"lsmm" = ["games/*.json"]
