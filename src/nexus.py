@@ -3,6 +3,7 @@ Nexus Mods NXM URL handler and download client.
 nxm://game_domain/mods/mod_id/files/file_id?key=K&expires=T&user_id=U
 """
 
+import hashlib
 import json
 import re
 import urllib.error
@@ -10,7 +11,19 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
+import net
+
 NXM_PATTERN = re.compile(r"^nxm://([^/]+)/mods/(\d+)/files/(\d+)", re.IGNORECASE)
+
+
+def md5_file(path: Path) -> str:
+    h = hashlib.md5()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
 NEXUS_API_BASE = "https://api.nexusmods.com/v1"
 USER_AGENT = "linux-mod-manager/1.0"
 
@@ -49,13 +62,8 @@ def get_download_link(nxm: dict, api_key: str) -> str:
     if qs:
         endpoint += "?" + urllib.parse.urlencode(qs)
 
-    req = urllib.request.Request(
-        endpoint,
-        headers={"apikey": api_key, "User-Agent": USER_AGENT},
-    )
     try:
-        with urllib.request.urlopen(req) as resp:
-            data = json.loads(resp.read())
+        data = json.loads(net.request(endpoint, headers={"apikey": api_key, "User-Agent": USER_AGENT}))
     except urllib.error.HTTPError as e:
         body = e.read().decode(errors="replace")
         raise RuntimeError(f"Nexus API {e.code}: {body}") from e
@@ -76,13 +84,8 @@ def get_mod_files(game_domain: str, mod_id: int, api_key: str) -> list[dict]:
     Returns list of file dicts (file_id, name, version, category_name, uploaded_timestamp, …).
     """
     endpoint = f"{NEXUS_API_BASE}/games/{game_domain}/mods/{mod_id}/files.json"
-    req = urllib.request.Request(
-        endpoint,
-        headers={"apikey": api_key, "User-Agent": USER_AGENT},
-    )
     try:
-        with urllib.request.urlopen(req) as resp:
-            data = json.loads(resp.read())
+        data = json.loads(net.request(endpoint, headers={"apikey": api_key, "User-Agent": USER_AGENT}))
     except urllib.error.HTTPError as e:
         body = e.read().decode(errors="replace")
         raise RuntimeError(f"Nexus API {e.code}: {body}") from e
@@ -107,13 +110,8 @@ def check_update(game_domain: str, mod_id: int, current_file_id: int, api_key: s
 def fetch_collection(slug: str, api_key: str) -> dict | None:
     """Fetch collection metadata from Nexus API. Returns None on any failure."""
     endpoint = f"{NEXUS_API_BASE}/collections/{slug}.json"
-    req = urllib.request.Request(
-        endpoint,
-        headers={"apikey": api_key, "User-Agent": USER_AGENT},
-    )
     try:
-        with urllib.request.urlopen(req) as resp:
-            return json.loads(resp.read())
+        return json.loads(net.request(endpoint, headers={"apikey": api_key, "User-Agent": USER_AGENT}))
     except Exception:
         return None
 
@@ -146,13 +144,7 @@ def fetch_collection_graphql(slug: str, api_key: str) -> dict | None:
         """ % slug
     }
     try:
-        req = urllib.request.Request(
-            url,
-            data=json.dumps(query).encode(),
-            headers=headers,
-        )
-        with urllib.request.urlopen(req) as resp:
-            response = json.loads(resp.read())
+        response = json.loads(net.request(url, data=json.dumps(query).encode(), headers=headers))
     except Exception:
         return None
 
@@ -176,7 +168,7 @@ def fetch_collection_graphql(slug: str, api_key: str) -> dict | None:
     }
 
 
-def download_file(url: str, dest: Path, on_progress=None) -> None:
+def download_file(url: str, dest: Path, on_progress=None, expected_md5: str | None = None) -> None:
     """
     Download URL to dest. Calls on_progress(downloaded_bytes, total_bytes) if given.
     """
@@ -186,7 +178,8 @@ def download_file(url: str, dest: Path, on_progress=None) -> None:
         parsed._replace(path=urllib.parse.quote(parsed.path, safe="/:@!$&'()*+,;="))
     )
     req = urllib.request.Request(safe_url, headers={"User-Agent": USER_AGENT})
-    with urllib.request.urlopen(req) as resp:
+    hasher = hashlib.md5() if expected_md5 else None
+    with urllib.request.urlopen(req, timeout=net.DEFAULT_TIMEOUT) as resp:
         total = int(resp.headers.get("Content-Length", 0))
         dest.parent.mkdir(parents=True, exist_ok=True)
         downloaded = 0
@@ -196,6 +189,15 @@ def download_file(url: str, dest: Path, on_progress=None) -> None:
                 if not chunk:
                     break
                 f.write(chunk)
+                if hasher:
+                    hasher.update(chunk)
                 downloaded += len(chunk)
                 if on_progress:
                     on_progress(downloaded, total)
+    if expected_md5 and hasher:
+        actual = hasher.hexdigest()
+        if actual.lower() != expected_md5.lower():
+            dest.unlink(missing_ok=True)
+            raise RuntimeError(
+                f"Checksum mismatch for {dest.name}: expected {expected_md5}, got {actual}"
+            )

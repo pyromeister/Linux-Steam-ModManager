@@ -17,6 +17,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
+import net
 from base import BaseEngine
 from config import find_library_for_app
 from installer import (
@@ -75,12 +76,10 @@ class ModFolderEngine(BaseEngine):
         install_dat = smapi["install_dat"]
         exe = smapi.get("executable", "StardewModdingAPI")
 
-        req = urllib.request.Request(
+        release = json.loads(net.request(
             f"{GITHUB_API}/{repo}/releases/latest",
             headers={"User-Agent": USER_AGENT, "Accept": "application/vnd.github+json"},
-        )
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            release = json.loads(resp.read())
+        ))
         version = release["tag_name"]
 
         asset = next(

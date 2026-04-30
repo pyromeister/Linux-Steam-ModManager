@@ -103,9 +103,11 @@ class ModRow(Gtk.ListBoxRow):
         label_box.append(name_label)
 
         kind = mod.get("kind")
-        if kind in ("se_plugin", "framework"):
+        if kind in ("se_plugin", "framework", "unmanaged"):
             if kind == "framework":
                 sub_text = "Framework (not tracked)" if mod.get("untracked") else "Framework"
+            elif kind == "unmanaged":
+                sub_text = "Unmanaged (not installed via LSMM)"
             else:
                 sub_text = "SE Plugin"
             sub = Gtk.Label(label=sub_text)
@@ -1072,7 +1074,7 @@ class ModManagerWindow(Adw.ApplicationWindow):
         dialog.present()
 
     def _do_nxm_import(self, url: str, api_key: str):
-        from nexus import parse_nxm, get_download_link, download_file
+        from nexus import parse_nxm, get_download_link, get_mod_files, download_file
 
         nxm = parse_nxm(url.strip())
         if not nxm:
@@ -1088,6 +1090,13 @@ class ModManagerWindow(Adw.ApplicationWindow):
                 slug = self._game_slug or "unknown"
                 dest = ARCHIVES_DIR / slug / filename
 
+                try:
+                    files = get_mod_files(nxm["game_domain"], nxm["mod_id"], api_key)
+                    file_entry = next((f for f in files if f.get("file_id") == nxm["file_id"]), None)
+                    expected_md5 = file_entry.get("md5") if file_entry else None
+                except Exception:
+                    expected_md5 = None  # md5 prefetch is best-effort; don't block download on failure
+
                 GLib.idle_add(self.status_label.set_text, f"Downloading {filename}...")
                 GLib.idle_add(self._progress_set, 0.0)
 
@@ -1095,7 +1104,7 @@ class ModManagerWindow(Adw.ApplicationWindow):
                     if total > 0:
                         GLib.idle_add(self._progress_set, downloaded / total)
 
-                download_file(dl_url, dest, on_progress=on_dl_progress)
+                download_file(dl_url, dest, on_progress=on_dl_progress, expected_md5=expected_md5)
 
                 GLib.idle_add(self.status_label.set_text, f"Installing {filename}...")
                 GLib.idle_add(self._progress_start_pulse)
