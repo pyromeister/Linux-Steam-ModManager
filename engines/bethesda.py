@@ -127,6 +127,7 @@ class BethesdaEngine(BaseEngine):
         plugin_lookup = {p.name: p for p in PluginsFile.read(self.paths.plugins_txt).plugins}
         result = []
         tracked_se_dlls: set[str] = set()
+        tracked_plugin_names: set[str] = set()
 
         data_dir_str = str(self.paths.data_dir)
 
@@ -146,6 +147,7 @@ class BethesdaEngine(BaseEngine):
                 ext = Path(f).suffix.lower()
                 if ext in PLUGIN_EXTENSIONS:
                     plugins.append(f)
+                    tracked_plugin_names.add(Path(f).name)
                 elif ext == DLL_EXTENSION:
                     tracked_se_dlls.add(Path(f).name)
             active = all(
@@ -158,6 +160,17 @@ class BethesdaEngine(BaseEngine):
             for dll in sorted(self.paths.se_plugins_dir.glob(f"*{DLL_EXTENSION}")):
                 if dll.name not in tracked_se_dlls:
                     result.append({"name": dll.stem, "active": True, "plugins": [], "kind": "se_plugin"})
+
+        # Plugins present in Plugins.txt but not tracked in the manifest
+        # (installed before LSMM or via another tool)
+        for p in plugin_lookup.values():
+            if p.name not in tracked_plugin_names and (self.paths.data_dir / p.name).exists():
+                result.append({
+                    "name": p.name,
+                    "active": p.active,
+                    "plugins": [str(self.paths.data_dir / p.name)],
+                    "kind": "unmanaged",
+                })
 
         return result
 
@@ -181,10 +194,12 @@ class BethesdaEngine(BaseEngine):
 
     def _set_mod_active(self, mod_name: str, active: bool) -> None:
         manifest = load_manifest()
-        if mod_name not in manifest:
-            print(f"Not installed: {mod_name}")
-            return
         pf = PluginsFile.read(self.paths.plugins_txt)
+        if mod_name not in manifest:
+            # Unmanaged plugin: mod_name IS the plugin filename
+            pf.set_active(mod_name, active)
+            pf.write()
+            return
         for f in manifest[mod_name].get("files", []):
             p = Path(f)
             if p.suffix.lower() in PLUGIN_EXTENSIONS:
