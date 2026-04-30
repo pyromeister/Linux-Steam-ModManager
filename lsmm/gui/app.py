@@ -15,7 +15,7 @@ gi.require_version("Adw", "1")
 gi.require_version("Pango", "1.0")
 from gi.repository import Adw, Gdk, GLib, GObject, Gtk, Gio, Pango
 
-# Bootstrap paths
+ROOT = Path(__file__).parent.parent.parent
 
 from lsmm.core.config import (
     load_profile, GAMES_DIR, ARCHIVES_DIR,
