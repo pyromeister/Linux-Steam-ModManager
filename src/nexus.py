@@ -12,6 +12,7 @@ import urllib.request
 from pathlib import Path
 
 import net
+from version import APP_NAME, APP_VERSION
 
 NXM_PATTERN = re.compile(r"^nxm://([^/]+)/mods/(\d+)/files/(\d+)", re.IGNORECASE)
 
@@ -25,7 +26,15 @@ def md5_file(path: Path) -> str:
 
 
 NEXUS_API_BASE = "https://api.nexusmods.com/v1"
-USER_AGENT = "linux-mod-manager/1.0"
+
+
+def _api_headers(api_key: str) -> dict:
+    return {
+        "apikey": api_key,
+        "User-Agent": f"{APP_NAME}/{APP_VERSION} (+https://github.com/pyromeister/Linux-Steam-ModManager)",
+        "Application-Name": APP_NAME,
+        "Application-Version": APP_VERSION,
+    }
 
 
 def parse_nxm(url: str) -> dict | None:
@@ -63,7 +72,7 @@ def get_download_link(nxm: dict, api_key: str) -> str:
         endpoint += "?" + urllib.parse.urlencode(qs)
 
     try:
-        data = json.loads(net.request(endpoint, headers={"apikey": api_key, "User-Agent": USER_AGENT}))
+        data = json.loads(net.request(endpoint, headers=_api_headers(api_key)))
     except urllib.error.HTTPError as e:
         body = e.read().decode(errors="replace")
         raise RuntimeError(f"Nexus API {e.code}: {body}") from e
@@ -85,7 +94,7 @@ def get_mod_files(game_domain: str, mod_id: int, api_key: str) -> list[dict]:
     """
     endpoint = f"{NEXUS_API_BASE}/games/{game_domain}/mods/{mod_id}/files.json"
     try:
-        data = json.loads(net.request(endpoint, headers={"apikey": api_key, "User-Agent": USER_AGENT}))
+        data = json.loads(net.request(endpoint, headers=_api_headers(api_key)))
     except urllib.error.HTTPError as e:
         body = e.read().decode(errors="replace")
         raise RuntimeError(f"Nexus API {e.code}: {body}") from e
@@ -111,18 +120,14 @@ def fetch_collection(slug: str, api_key: str) -> dict | None:
     """Fetch collection metadata from Nexus API. Returns None on any failure."""
     endpoint = f"{NEXUS_API_BASE}/collections/{slug}.json"
     try:
-        return json.loads(net.request(endpoint, headers={"apikey": api_key, "User-Agent": USER_AGENT}))
+        return json.loads(net.request(endpoint, headers=_api_headers(api_key)))
     except Exception:
         return None
 
 
 def fetch_collection_graphql(slug: str, api_key: str) -> dict | None:
     url = "https://api.nexusmods.com/v2/graphql"
-    headers = {
-        "apikey": api_key,
-        "User-Agent": USER_AGENT,
-        "Content-Type": "application/json",
-    }
+    headers = _api_headers(api_key) | {"Content-Type": "application/json"}
     query = {
         "query": """
         {
@@ -177,7 +182,7 @@ def download_file(url: str, dest: Path, on_progress=None, expected_md5: str | No
     safe_url = urllib.parse.urlunsplit(
         parsed._replace(path=urllib.parse.quote(parsed.path, safe="/:@!$&'()*+,;="))
     )
-    req = urllib.request.Request(safe_url, headers={"User-Agent": USER_AGENT})
+    req = urllib.request.Request(safe_url, headers={"User-Agent": f"{APP_NAME}/{APP_VERSION}"})
     hasher = hashlib.md5() if expected_md5 else None
     with urllib.request.urlopen(req, timeout=net.DEFAULT_TIMEOUT) as resp:
         total = int(resp.headers.get("Content-Length", 0))
