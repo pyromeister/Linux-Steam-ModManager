@@ -155,7 +155,10 @@ class BethesdaEngine(BaseEngine):
                 (p := plugin_lookup.get(Path(f).name)) and p.active
                 for f in plugins
             ) if plugins else True
-            result.append({"name": name, "active": active, "plugins": plugins, "kind": "mod"})
+            result.append({
+                "name": name, "active": active, "plugins": plugins,
+                "kind": "mod", "nexus": entry.get("nexus"),
+            })
 
         if self.paths.se_plugins_dir and self.paths.se_plugins_dir.exists():
             for dll in sorted(self.paths.se_plugins_dir.glob(f"*{DLL_EXTENSION}")):

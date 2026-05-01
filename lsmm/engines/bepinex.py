@@ -288,7 +288,7 @@ class BepInExEngine(BaseEngine):
 
             # BepInEx itself gets a special "framework" kind
             kind = "framework" if name == "BepInEx" else "mod"
-            result.append({"name": name, "active": active, "plugins": [], "kind": kind})
+            result.append({"name": name, "active": active, "plugins": [], "kind": kind, "nexus": entry.get("nexus")})
 
         # If BepInEx is installed on disk but not in manifest, show it as untracked
         bepinex_tracked = any(e.get("name") == "BepInEx" or n == "BepInEx"

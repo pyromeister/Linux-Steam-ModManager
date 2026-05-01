@@ -223,6 +223,7 @@ class RimWorldEngine(BaseEngine):
             result.append({
                 "name": mod_name, "display": about["name"],
                 "packageId": about["packageId"], "active": active, "plugins": [],
+                "nexus": entry.get("nexus"),
             })
 
         # Untracked mods in Mods/ dir

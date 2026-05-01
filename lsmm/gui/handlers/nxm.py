@@ -1,4 +1,5 @@
 import threading
+import time
 
 import gi
 gi.require_version("Gtk", "4.0")
@@ -6,6 +7,17 @@ from gi.repository import GLib
 
 from lsmm.core.config import ARCHIVES_DIR
 from lsmm.core.installer import ConflictError
+
+
+def _nxm_error_message(exc: Exception) -> str:
+    msg = str(exc)
+    if "403" in msg:
+        return "Nexus API key invalid or missing — get one at nexusmods.com → Account → API Keys"
+    if "404" in msg:
+        return "Mod or file not found on Nexus (may have been removed or made private)"
+    if "410" in msg:
+        return "This file has been permanently removed from Nexus Mods"
+    return f"NXM import failed: {exc}"
 
 
 def do_nxm_import(window, url: str, api_key: str):
@@ -16,15 +28,26 @@ def do_nxm_import(window, url: str, api_key: str):
         window._toast("Invalid NXM URL — expected nxm://...")
         return
 
+    if nxm.get("expires") and int(nxm["expires"]) < int(time.time()):
+        window._toast("This Nexus download link has expired — click the download button again on Nexus Mods")
+        return
+
     def run():
         try:
             GLib.idle_add(window.status_label.set_text, "Getting download link from Nexus...")
-            dl_url = get_download_link(nxm, api_key)
+            try:
+                dl_url = get_download_link(nxm, api_key)
+            except Exception as link_err:
+                GLib.idle_add(window._progress_done)
+                GLib.idle_add(window.status_label.set_text, "Ready")
+                GLib.idle_add(window._toast, _nxm_error_message(link_err))
+                return
 
             filename = dl_url.split("/")[-1].split("?")[0]
             slug = window._game_slug or "unknown"
             dest = ARCHIVES_DIR / slug / filename
 
+            file_entry = None
             try:
                 files = get_mod_files(nxm["game_domain"], nxm["mod_id"], api_key)
                 file_entry = next((f for f in files if f.get("file_id") == nxm["file_id"]), None)
@@ -48,6 +71,10 @@ def do_nxm_import(window, url: str, api_key: str):
                 "mod_id": nxm["mod_id"],
                 "file_id": nxm["file_id"],
             }
+            if file_entry:
+                for key in ("version", "size_kb", "uploaded_timestamp"):
+                    if file_entry.get(key) is not None:
+                        nexus_meta[key] = file_entry[key]
             try:
                 window.engine.install(dest, nexus_meta=nexus_meta)
             except ConflictError as ce:
