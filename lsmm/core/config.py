@@ -10,6 +10,7 @@ from importlib.resources import files as _pkg_files
 from pathlib import Path
 
 GAMES_DIR = Path(str(_pkg_files("lsmm").joinpath("games")))
+USER_GAMES_DIR = Path.home() / ".config/linux-mod-manager/games"
 APP_CONFIG_PATH = Path.home() / ".config/linux-mod-manager/config.json"
 ARCHIVES_DIR = Path.home() / ".local/share/linux-mod-manager/archives"
 BACKUPS_DIR = Path.home() / ".local/share/linux-mod-manager/backups"
@@ -118,7 +119,10 @@ def find_library_for_app(app_id: str | int) -> Path | None:
 
 
 def load_profile(game: str) -> dict:
-    """Load game profile from games/<game>.json."""
+    """Load game profile — user override (~/.config/linux-mod-manager/games/) takes precedence."""
+    user_path = USER_GAMES_DIR / f"{game}.json"
+    if user_path.exists():
+        return json.loads(user_path.read_text())
     path = GAMES_DIR / f"{game}.json"
     if not path.exists():
         available = [p.stem for p in GAMES_DIR.glob("*.json")]

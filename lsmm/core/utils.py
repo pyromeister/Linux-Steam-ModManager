@@ -2,7 +2,7 @@
 
 import json
 
-from lsmm.core.config import load_profile, GAMES_DIR
+from lsmm.core.config import load_profile, GAMES_DIR, USER_GAMES_DIR
 
 
 def load_engine(game: str):
@@ -25,19 +25,26 @@ def load_engine(game: str):
 
 
 def available_games() -> list:
-    result = []
-    for p in sorted(GAMES_DIR.glob("*.json")):
-        data = json.loads(p.read_text())
-        result.append((p.stem, data["name"]))
-    return result
+    games: dict[str, str] = {}
+    for p in GAMES_DIR.glob("*.json"):
+        try:
+            games[p.stem] = json.loads(p.read_text())["name"]
+        except Exception:
+            continue
+    if USER_GAMES_DIR.exists():
+        for p in USER_GAMES_DIR.glob("*.json"):
+            try:
+                games[p.stem] = json.loads(p.read_text())["name"]
+            except Exception:
+                continue
+    return sorted(games.items())
 
 
 def find_game_by_nexus_domain(domain: str) -> str | None:
-    for p in GAMES_DIR.glob("*.json"):
+    for slug, _ in available_games():
         try:
-            data = json.loads(p.read_text())
-            if data.get("nexus_domain", "").lower() == domain.lower():
-                return p.stem
+            if load_profile(slug).get("nexus_domain", "").lower() == domain.lower():
+                return slug
         except Exception:
             continue
     return None

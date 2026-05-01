@@ -31,6 +31,10 @@ def show_help_dialog(win):
             "<b>NXM URL</b> (experimental)\n"
             'Click "NXM URL", paste an <tt>nxm://</tt> link from Nexus Mods. '
             "Requires a free Nexus API key (nexusmods.com → Account → API Keys).\n\n"
+            "<b>Custom game profiles</b>\n"
+            "Drop a <tt>&lt;slug&gt;.json</tt> file into "
+            "<tt>~/.config/linux-mod-manager/games/</tt> to add a new game or override a "
+            "bundled profile. The file format is documented on GitHub.\n\n"
             '<a href="https://github.com/pyromaster/linux-sfse-modlauncher">'
             "GitHub Repository</a>"
         ),
