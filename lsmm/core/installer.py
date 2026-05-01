@@ -65,28 +65,34 @@ def extract(archive_path: Path, dest: Path) -> None:
         raise ValueError(f"Unsupported archive format: {suffix}")
 
 
-def detect_source_root(extracted: Path) -> Path:
+def detect_source_root(extracted: Path) -> tuple[Path, str, list]:
     """
     Detect the actual content root inside an extracted archive.
+    Returns (root_path, layout_name, warnings).
 
-    Handles four layouts:
-      1. Data/plugin.esp at root → root is the source root
-      2. ModName/Data/plugin.esp → ModName/ is a wrapper; skip it
-      3. Data/Data/plugin.esp → double-nested; skip outer Data/
-      4. plugin.esp at root → root is the source root (flat)
+    Layout names: "data" (content in Data/), "double" (Data/Data/), "root" (flat).
+    Handles single wrapper folders transparently.
     """
     children = list(extracted.iterdir())
 
-    # Single wrapper folder — go one level deeper
     if len(children) == 1 and children[0].is_dir():
         inner = children[0]
-        # Double-nest: Data/Data/… — skip the outer one
-        if inner.name.lower() == "data" and (inner / "Data").exists():
-            return inner
-        # Otherwise the wrapper itself is the source root
-        return inner
+        if inner.name.lower() == "data":
+            double = inner / "Data"
+            if double.is_dir():
+                return double, "double", []
+            return inner, "data", []
+        # Wrapper folder — look for Data/ inside
+        data_sub = inner / "Data"
+        if data_sub.is_dir():
+            double = data_sub / "Data"
+            if double.is_dir():
+                return double, "double", []
+            return data_sub, "data", []
+        # Non-Data wrapper with no Data subfolder: copy wrapper + contents to dest
+        return extracted, "root", []
 
-    return extracted
+    return extracted, "root", []
 
 
 def _normalize_tree(src: Path) -> None:
@@ -110,8 +116,8 @@ def _normalize_tree(src: Path) -> None:
 def install_files(
     src_root: Path,
     dest_root: Path,
-    game_slug: str | None,
-    mod_name: str,
+    game_slug: str | None = None,
+    mod_name: str = "unknown",
 ) -> tuple[list[Path], dict[str, str]]:
     """
     Copy files from src_root into dest_root, normalizing directory casing.
@@ -149,11 +155,11 @@ def install_files(
 def detect_and_install(
     extracted: Path,
     dest_root: Path,
-    game_slug: str | None,
-    mod_name: str,
+    game_slug: str | None = None,
+    mod_name: str = "unknown",
 ) -> tuple[list[Path], dict[str, str]]:
     """Detect source root inside extracted archive, then install."""
-    src_root = detect_source_root(extracted)
+    src_root, _, _ = detect_source_root(extracted)
     return install_files(src_root, dest_root, game_slug, mod_name)
 
 
@@ -199,7 +205,7 @@ def check_conflicts(
                 key = f
             file_to_mod[key] = mod_name
 
-    src_root = detect_source_root(extracted)
+    src_root, _, _ = detect_source_root(extracted)
     conflicts = []
     for src_file in src_root.rglob("*"):
         if not src_file.is_file() or _should_skip(src_file):
