@@ -9,6 +9,7 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, GLib, Gtk, Gio
 
+from lsmm.core.updater import check_for_update
 from lsmm.core.config import (
     get_steam_root, get_steam_candidates,
     get_nexus_api_key,
@@ -54,6 +55,7 @@ class ModManagerWindow(Adw.ApplicationWindow):
         self._build_ui()
         self._update_setup_btn()
         GLib.idle_add(self._init_steam_path)
+        threading.Thread(target=self._check_for_update, daemon=True).start()
 
     def _build_ui(self):
         self.toast_overlay = Adw.ToastOverlay()
@@ -61,6 +63,11 @@ class ModManagerWindow(Adw.ApplicationWindow):
 
         root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self.toast_overlay.set_child(root)
+
+        self.update_banner = Adw.Banner()
+        self.update_banner.set_button_label("Release Notes")
+        self.update_banner.connect("button-clicked", self._on_update_banner_clicked)
+        root.append(self.update_banner)
 
         header = Adw.HeaderBar()
         root.append(header)
@@ -525,6 +532,24 @@ class ModManagerWindow(Adw.ApplicationWindow):
 
     def _on_setup_btn(self, _btn):
         setup_handler.handle_setup_btn(self)
+
+    # ── Update check ──────────────────────────────────────────────────────────
+
+    def _check_for_update(self):
+        result = check_for_update()
+        if result:
+            tag, url = result
+            self._update_release_url = url
+            GLib.idle_add(self._show_update_banner, tag)
+
+    def _show_update_banner(self, tag: str):
+        self.update_banner.set_title(f"Update available: {tag}")
+        self.update_banner.set_revealed(True)
+
+    def _on_update_banner_clicked(self, _banner):
+        url = getattr(self, "_update_release_url", None)
+        if url:
+            Gtk.UriLauncher.new(url).launch(self, None, None, None)
 
     # ── Utilities ─────────────────────────────────────────────────────────────
 
