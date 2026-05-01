@@ -19,8 +19,17 @@ class BaseEngine(ABC):
     # --- Required ---
 
     @abstractmethod
-    def install(self, archive_path: Path, mod_name: str = None) -> None:
-        """Extract archive and install mod files to the correct locations."""
+    def install(
+        self,
+        archive_path: Path,
+        mod_name: str | None = None,
+        force: bool = False,
+        nexus_meta: dict | None = None,
+    ) -> None:
+        """Extract archive and install mod files to the correct locations.
+        Raises ConflictError if files would overwrite tracked mods (unless force=True).
+        nexus_meta: optional Nexus file metadata dict ({game_domain, mod_id, file_id}).
+        """
 
     @abstractmethod
     def uninstall(self, mod_name: str) -> None:

@@ -50,7 +50,7 @@ class BethesdaEngine(BaseEngine):
     def install(
         self,
         archive_path: Path,
-        mod_name: str = None,
+        mod_name: str | None = None,
         force: bool = False,
         nexus_meta: dict | None = None,
     ) -> None:
