@@ -10,6 +10,9 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "GPL-3.0-or-later"}
 authors = [{name = "pyromeister"}]
+dependencies = [
+  "PyGObject>=3.44",
+]
 classifiers = [
   "Operating System :: POSIX :: Linux",
   "Programming Language :: Python :: 3",

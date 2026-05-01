@@ -1,0 +1,3 @@
+# Install runtime + dev deps: pip install -e ".[dev]"
+# Or use this file directly for CI / bare venvs:
+-e ".[dev]"

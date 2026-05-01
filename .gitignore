@@ -37,7 +37,6 @@ gitstructure.md
 scripts/
 Plans/
 Makefile
-tests/
 .pytest_cache/
 
 # Dev-only docs folder (fully local, never in clone)

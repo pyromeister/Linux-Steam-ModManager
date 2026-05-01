@@ -225,11 +225,27 @@ def check_conflicts(
 
 # ── Manifest ─────────────────────────────────────────────────────────────────
 
+def _resolve_manifest_paths(manifest: dict) -> tuple[dict, bool]:
+    """Resolve all file paths in manifest entries. Returns (manifest, changed)."""
+    changed = False
+    for entry in manifest.values():
+        files = entry.get("files", [])
+        resolved = [str(Path(f).resolve(strict=False)) for f in files]
+        if resolved != files:
+            entry["files"] = resolved
+            changed = True
+    return manifest, changed
+
+
 def load_manifest() -> dict:
     _migrate_legacy_manifest()
-    if MANIFEST_PATH.exists():
-        return json.loads(MANIFEST_PATH.read_text())
-    return {}
+    if not MANIFEST_PATH.exists():
+        return {}
+    manifest = json.loads(MANIFEST_PATH.read_text())
+    manifest, changed = _resolve_manifest_paths(manifest)
+    if changed:
+        save_manifest(manifest)
+    return manifest
 
 
 def save_manifest(manifest: dict) -> None:
@@ -250,7 +266,7 @@ def record_install(
     entry: dict = {
         "archive": str(archive),
         "archive_cache": str(archive_cache) if archive_cache else None,
-        "files": [str(f) for f in installed_files],
+        "files": [str(f.resolve()) for f in installed_files],
         "game": game_slug,
         "backups": backups or {},
     }
