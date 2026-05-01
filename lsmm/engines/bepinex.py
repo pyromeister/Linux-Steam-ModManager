@@ -7,6 +7,7 @@ No load order (BepInEx handles plugin ordering internally).
 """
 
 import json
+import logging
 import shutil
 import urllib.error
 import urllib.request
@@ -31,6 +32,8 @@ from lsmm.core.installer import (
 DLL_EXT = ".dll"
 BEPINEX_API = "https://api.github.com/repos/BepInEx/BepInEx/releases/latest"
 USER_AGENT = "linux-mod-manager/1.0"
+
+logger = logging.getLogger(__name__)
 
 
 class BepInExEngine(BaseEngine):
@@ -104,7 +107,7 @@ class BepInExEngine(BaseEngine):
         Returns the installed version string.
         Raises RuntimeError on any failure.
         """
-        print("Fetching latest BepInEx release info from GitHub...")
+        logger.info("Fetching latest BepInEx release info from GitHub...")
         req = urllib.request.Request(
             BEPINEX_API,
             headers={"User-Agent": USER_AGENT, "Accept": "application/vnd.github+json"},
@@ -135,7 +138,7 @@ class BepInExEngine(BaseEngine):
         filename = asset["name"]
         tmp_zip = Path(f"/tmp/bepinex_{filename}")
 
-        print(f"Downloading {filename} ({version})...")
+        logger.info(f"Downloading {filename} ({version})...")
         dl_req = urllib.request.Request(dl_url, headers={"User-Agent": USER_AGENT})
         with urllib.request.urlopen(dl_req, timeout=60) as resp:
             total = int(resp.headers.get("Content-Length", 0))
@@ -150,7 +153,7 @@ class BepInExEngine(BaseEngine):
                     if on_progress:
                         on_progress(downloaded, total)
 
-        print(f"Extracting to {self.game_root}...")
+        logger.info(f"Extracting to {self.game_root}...")
         self.game_root.mkdir(parents=True, exist_ok=True)
         with zipfile.ZipFile(tmp_zip) as z:
             members = z.namelist()
@@ -173,7 +176,7 @@ class BepInExEngine(BaseEngine):
 
         tmp_zip.unlink(missing_ok=True)
 
-        print(f"✓ BepInEx {version} installed to {self.game_root}")
+        logger.info(f"✓ BepInEx {version} installed to {self.game_root}")
         return version
 
     # ── Install ──────────────────────────────────────────────────────────────
@@ -196,7 +199,7 @@ class BepInExEngine(BaseEngine):
         name = mod_name or archive_path.stem
         game_slug = self.profile.get("slug")
         with temp_extract_dir() as tmp:
-            print(f"Extracting {archive_path.name}...")
+            logger.info(f"Extracting {archive_path.name}...")
             extract(archive_path, tmp)
 
             top_names = {p.name.lower(): p for p in tmp.iterdir()}
@@ -217,21 +220,21 @@ class BepInExEngine(BaseEngine):
             archive_cache = cache_archive(archive_path, game_slug)
             self.plugins_dir.mkdir(parents=True, exist_ok=True)
 
-            print("Installing files...")
+            logger.info("Installing files...")
             installed, backups = install_files(src_root, dest_root, game_slug, name)
 
             record_install(name, archive_path, installed, game_slug=game_slug,
                            archive_cache=archive_cache, backups=backups,
                            nexus_meta=nexus_meta)
 
-        print(f"✓ Installed: {name}")
+        logger.info(f"✓ Installed: {name}")
 
     # ── Uninstall ────────────────────────────────────────────────────────────
 
     def uninstall(self, mod_name: str) -> None:
         entry = remove_from_manifest(mod_name)
         if not entry:
-            print(f"Not installed: {mod_name}")
+            logger.warning(f"Not installed: {mod_name}")
             return
 
         backups = entry.get("backups", {})
@@ -258,7 +261,7 @@ class BepInExEngine(BaseEngine):
             except Exception:
                 pass
 
-        print(f"✓ Uninstalled: {mod_name}")
+        logger.info(f"✓ Uninstalled: {mod_name}")
 
     # ── List ─────────────────────────────────────────────────────────────────
 
@@ -319,7 +322,7 @@ class BepInExEngine(BaseEngine):
                 disabled = Path(f_str + ".disabled")
                 if disabled.exists():
                     disabled.rename(Path(f_str))
-        print(f"✓ enabled: {mod_name}")
+        logger.info(f"✓ enabled: {mod_name}")
 
     def disable_mod(self, mod_name: str) -> None:
         manifest = load_manifest()
@@ -329,4 +332,4 @@ class BepInExEngine(BaseEngine):
             p = Path(f_str)
             if p.suffix.lower() == DLL_EXT and p.exists():
                 p.rename(Path(f_str + ".disabled"))
-        print(f"✓ disabled: {mod_name}")
+        logger.info(f"✓ disabled: {mod_name}")

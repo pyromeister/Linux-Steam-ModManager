@@ -5,6 +5,7 @@ Load order + activation tracked in ModsConfig.xml (Unity config dir).
 Capabilities: install/uninstall, activation toggle, load order.
 """
 
+import logging
 import shutil
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -21,6 +22,8 @@ from lsmm.core.installer import (
     remove_from_manifest,
     temp_extract_dir,
 )
+
+logger = logging.getLogger(__name__)
 
 MODSCONFIG_PATH = (
     Path.home()
@@ -133,7 +136,7 @@ class RimWorldEngine(BaseEngine):
             )
 
             self._activate_package(package_id)
-            print(f"✓ Installed: {display_name} ({package_id})")
+            logger.info(f"✓ Installed: {display_name} ({package_id})")
 
     def _find_mod_root(self, extracted: Path) -> Path:
         """
@@ -154,7 +157,7 @@ class RimWorldEngine(BaseEngine):
     def uninstall(self, mod_name: str) -> None:
         entry = remove_from_manifest(mod_name)
         if not entry:
-            print(f"Not tracked: {mod_name}")
+            logger.warning(f"Not tracked: {mod_name}")
             return
 
         # Remove mod folder — find it by checking which Mods/ subdir owns the files
@@ -180,7 +183,7 @@ class RimWorldEngine(BaseEngine):
             about = _read_about(d) if d.exists() else {"packageId": d.name.lower()}
             self._deactivate_package(about["packageId"])
 
-        print(f"✓ Uninstalled: {mod_name}")
+        logger.info(f"✓ Uninstalled: {mod_name}")
 
     # ── List ─────────────────────────────────────────────────────────────────
 
@@ -259,13 +262,13 @@ class RimWorldEngine(BaseEngine):
         pkg_id = self._package_id_for(mod_name)
         if pkg_id:
             self._activate_package(pkg_id)
-            print(f"✓ enabled: {mod_name}")
+            logger.info(f"✓ enabled: {mod_name}")
 
     def disable_mod(self, mod_name: str) -> None:
         pkg_id = self._package_id_for(mod_name)
         if pkg_id:
             self._deactivate_package(pkg_id)
-            print(f"✓ disabled: {mod_name}")
+            logger.info(f"✓ disabled: {mod_name}")
 
     def _package_id_for(self, mod_name: str) -> str | None:
         """Resolve mod_name → packageId via manifest or Mods/ scan."""

@@ -3,7 +3,9 @@ GTK4 + libadwaita GUI for Linux Steam ModManager.
 Entry point: ModManagerApp wraps ModManagerWindow.
 """
 
+import logging
 import sys
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 import gi
@@ -13,8 +15,16 @@ from gi.repository import Adw, Gdk, Gtk, Gio
 
 ROOT = Path(__file__).parent.parent.parent
 
+from lsmm.core.config import LOG_PATH
 from lsmm.core.utils import find_game_by_nexus_domain
 from lsmm.gui.window import ModManagerWindow
+
+
+def _setup_logging() -> None:
+    LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    handler = RotatingFileHandler(LOG_PATH, maxBytes=2 * 1024 * 1024, backupCount=3)
+    handler.setFormatter(logging.Formatter("%(asctime)s %(name)s %(levelname)s %(message)s"))
+    logging.basicConfig(level=logging.INFO, handlers=[handler])
 
 
 # ── Application ───────────────────────────────────────────────────────────────
@@ -60,5 +70,6 @@ class ModManagerApp(Adw.Application):
 
 
 def main():
+    _setup_logging()
     app = ModManagerApp()
     app.run(sys.argv)

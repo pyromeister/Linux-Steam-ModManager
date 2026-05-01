@@ -7,6 +7,7 @@ No framework setup, no load order (handled by the game / mod loader itself).
 
 import io
 import json
+import logging
 import shutil
 import stat
 import urllib.error
@@ -33,6 +34,8 @@ from lsmm.core.installer import (
 
 USER_AGENT = "linux-mod-manager/1.0"
 GITHUB_API = "https://api.github.com/repos"
+
+logger = logging.getLogger(__name__)
 
 
 class ModFolderEngine(BaseEngine):
@@ -180,7 +183,7 @@ class ModFolderEngine(BaseEngine):
         name = mod_name or archive_path.stem
         game_slug = self.profile.get("slug")
         with temp_extract_dir() as tmp:
-            print(f"Extracting {archive_path.name}...")
+            logger.info(f"Extracting {archive_path.name}...")
             extract(archive_path, tmp)
 
             tops = [p for p in tmp.iterdir()]
@@ -204,7 +207,7 @@ class ModFolderEngine(BaseEngine):
             archive_cache = cache_archive(archive_path, game_slug)
             self.mods_dir.mkdir(parents=True, exist_ok=True)
 
-            print("Installing files...")
+            logger.info("Installing files...")
             installed, backups = install_files(src_root, dest, game_slug, name)
             record_install(
                 name, archive_path, installed,
@@ -212,14 +215,14 @@ class ModFolderEngine(BaseEngine):
                 backups=backups, nexus_meta=nexus_meta,
             )
 
-        print(f"✓ Installed: {name}")
+        logger.info(f"✓ Installed: {name}")
 
     # ── Uninstall ─────────────────────────────────────────────────────────────
 
     def uninstall(self, mod_name: str) -> None:
         entry = remove_from_manifest(mod_name)
         if not entry:
-            print(f"Not installed: {mod_name}")
+            logger.warning(f"Not installed: {mod_name}")
             return
 
         backups = entry.get("backups", {})
@@ -243,7 +246,7 @@ class ModFolderEngine(BaseEngine):
             except Exception:
                 pass
 
-        print(f"✓ Uninstalled: {mod_name}")
+        logger.info(f"✓ Uninstalled: {mod_name}")
 
     # ── List ──────────────────────────────────────────────────────────────────
 
@@ -304,7 +307,7 @@ class ModFolderEngine(BaseEngine):
             disabled_dir = self.mods_dir / f"{mod_name}.disabled"
             if disabled_dir.exists():
                 disabled_dir.rename(self.mods_dir / mod_name)
-        print(f"✓ enabled: {mod_name}")
+        logger.info(f"✓ enabled: {mod_name}")
 
     def disable_mod(self, mod_name: str) -> None:
         manifest = load_manifest()
@@ -317,4 +320,4 @@ class ModFolderEngine(BaseEngine):
             active_dir = self.mods_dir / mod_name
             if active_dir.exists():
                 active_dir.rename(self.mods_dir / f"{mod_name}.disabled")
-        print(f"✓ disabled: {mod_name}")
+        logger.info(f"✓ disabled: {mod_name}")

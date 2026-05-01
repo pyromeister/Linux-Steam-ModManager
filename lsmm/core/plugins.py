@@ -4,8 +4,11 @@ Preserves comment lines and blank lines exactly as-is.
 Format: *Active.esm | InactiveMod.esm | # comment
 """
 
+import logging
 from pathlib import Path
 from dataclasses import dataclass
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -87,4 +90,4 @@ class PluginsFile:
     def print_list(self) -> None:
         for p in self.plugins:
             status = "✓" if p.active else "✗"
-            print(f"  [{status}] {p.name}")
+            logger.info(f"  [{status}] {p.name}")

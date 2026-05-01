@@ -3,6 +3,7 @@ Bethesda engine plugin — covers Starfield, Skyrim SE, Fallout 4.
 Capabilities: load order, script extender, activation toggle.
 """
 
+import logging
 import shutil
 import stat
 from pathlib import Path
@@ -24,6 +25,8 @@ from lsmm.core.installer import (
     remove_from_manifest,
     temp_extract_dir,
 )
+
+logger = logging.getLogger(__name__)
 
 LAUNCH_SCRIPT_CONTENT = """\
 #!/bin/bash
@@ -59,7 +62,7 @@ class BethesdaEngine(BaseEngine):
         name = mod_name or archive_path.stem
         game_slug = self.profile.get("slug")
         with temp_extract_dir() as tmp:
-            print(f"Extracting {archive_path.name}...")
+            logger.info(f"Extracting {archive_path.name}...")
             extract(archive_path, tmp)
 
             if not force:
@@ -69,7 +72,7 @@ class BethesdaEngine(BaseEngine):
 
             archive_cache = cache_archive(archive_path, game_slug)
 
-            print("Installing files...")
+            logger.info("Installing files...")
             installed, backups = detect_and_install(tmp, self.paths.data_dir, game_slug, name)
 
             plugins_added = []
@@ -84,16 +87,16 @@ class BethesdaEngine(BaseEngine):
                            archive_cache=archive_cache, backups=backups,
                            nexus_meta=nexus_meta)
 
-        print(f"✓ Installed: {name}")
+        logger.info(f"✓ Installed: {name}")
         if plugins_added:
-            print(f"  Plugins activated: {', '.join(plugins_added)}")
+            logger.info(f"  Plugins activated: {', '.join(plugins_added)}")
 
     # ── Uninstall ────────────────────────────────────────────────────────────
 
     def uninstall(self, mod_name: str) -> None:
         entry = remove_from_manifest(mod_name)
         if not entry:
-            print(f"Not installed: {mod_name}")
+            logger.warning(f"Not installed: {mod_name}")
             return
 
         backups = entry.get("backups", {})
@@ -115,7 +118,7 @@ class BethesdaEngine(BaseEngine):
                 plugins_file.remove(f.name)
 
         plugins_file.write()
-        print(f"✓ Uninstalled: {mod_name}")
+        logger.info(f"✓ Uninstalled: {mod_name}")
 
     # ── List ─────────────────────────────────────────────────────────────────
 
@@ -203,14 +206,14 @@ class BethesdaEngine(BaseEngine):
             if p.suffix.lower() in PLUGIN_EXTENSIONS:
                 pf.set_active(p.name, active)
         pf.write()
-        print(f"✓ {'enabled' if active else 'disabled'}: {mod_name}")
+        logger.info(f"✓ {'enabled' if active else 'disabled'}: {mod_name}")
 
     # ── Script extender setup ────────────────────────────────────────────────
 
     def setup_script_extender(self) -> None:
         se = self.profile.get("script_extender")
         if not se:
-            print("No script extender configured for this game.")
+            logger.warning("No script extender configured for this game.")
             return
 
         script_path = self.paths.game_root / "se_launch.sh"
@@ -222,9 +225,9 @@ class BethesdaEngine(BaseEngine):
         )
         script_path.chmod(script_path.stat().st_mode | stat.S_IEXEC)
 
-        print(f"✓ Launch script created: {script_path}")
-        print("\nAdd this to Steam launch options:")
-        print(f'  "{script_path}" %command%')
+        logger.info(f"✓ Launch script created: {script_path}")
+        logger.info("\nAdd this to Steam launch options:")
+        logger.info(f'  "{script_path}" %command%')
         return script_path
 
     # ── INI setup ────────────────────────────────────────────────────────────
@@ -237,6 +240,6 @@ class BethesdaEngine(BaseEngine):
         if "bInvalidateOlderFiles=1" not in content:
             with ini.open("a") as f:
                 f.write("\n[Archive]\nbInvalidateOlderFiles=1\nsResourceDataDirsFinal=\n")
-            print(f"✓ Updated: {ini}")
+            logger.info(f"✓ Updated: {ini}")
         else:
-            print(f"✓ INI already correct: {ini}")
+            logger.info(f"✓ INI already correct: {ini}")
