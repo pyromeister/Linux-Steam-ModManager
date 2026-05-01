@@ -29,8 +29,13 @@ fill that gap with a proper native tool.
 - Install mods from `.zip`, `.7z`, and `.rar` archives
 - **NXM URL import** *(experimental)* — paste an `nxm://` link from Nexus Mods for direct download + install (requires free Nexus API key)
 - **Update check** — "Check Updates" button queries Nexus Mods API for newer versions of installed mods (NXM-imported only; requires API key)
+- **Update All** — after checking for updates, a results dialog lets you update all mods at once or open browser tabs for manual downloads
+- **Mod metadata in list** — version and file size displayed below each mod name in the mod list
+- **Better NXM error messages** — expiry detection, and specific messages for 403/404/410 responses
+- **In-app LSMM update check** — an info banner appears automatically when a new LSMM release is published on GitHub
 - **Progress bar** — install and download operations show a progress bar; NXM downloads display real percentage, file installs use pulse mode
 - **Games panel** — dedicated left column lists all game profiles; click to switch game, import external profiles via "Add", remove profiles via "Remove"
+- **Custom game profiles** — add your own game JSON profiles to `~/.config/linux-mod-manager/games/` without touching the installation; see [Game Profile Schema](https://github.com/pyromeister/Linux-Steam-ModManager/wiki/Game-Profile-Schema)
 - **Mod profiles** — save and restore named loadouts (active mods + load order) per game; "Save" button updates the selected profile in-place
 - **Launch game** — launch the selected game directly from the GUI
 - **Mod list search & sort** — alphabetic sort with live search filter
@@ -66,19 +71,29 @@ fill that gap with a proper native tool.
 ```bash
 git clone https://github.com/pyromeister/Linux-Steam-ModManager
 cd Linux-Steam-ModManager
+pip install .
 ```
 
-No pip dependencies — standard library only (GUI requires system GTK4 packages, see Requirements).
+This installs the `lsmm` and `lsmm-gui` entry points.
+GTK4 and libadwaita must be installed as system packages (see Requirements above) — they are not pip-installable.
+
+For development (includes pytest, flake8):
+
+```bash
+pip install ".[dev]"
+```
 
 ---
 
 ## Usage — GUI
 
 ```bash
+lsmm-gui
+# or without installing:
 python3 modlauncher-gui.py
 ```
 
-Select your game from the dropdown. The load order panel appears automatically
+Select your game from the games panel on the left. The load order panel appears automatically
 for games that support it (Bethesda games). Use **+ Install** to open a file
 chooser — you can select multiple archives at once and they will be installed
 sequentially.
@@ -88,10 +103,10 @@ sequentially.
 ## Usage — CLI
 
 ```bash
-python3 modlauncher.py --game starfield list
-python3 modlauncher.py --game starfield install ~/Downloads/SomeMod.zip
-python3 modlauncher.py --game starfield uninstall MyModName
-python3 modlauncher.py games
+lsmm --game starfield list
+lsmm --game starfield install ~/Downloads/SomeMod.zip
+lsmm --game starfield uninstall MyModName
+lsmm games
 ```
 
 Full command reference: [CLI Reference](https://github.com/pyromeister/Linux-Steam-ModManager/wiki/CLI-Reference)
@@ -109,6 +124,13 @@ Full command reference: [CLI Reference](https://github.com/pyromeister/Linux-Ste
 Full list with engine and script extender details: [Supported Games](https://github.com/pyromeister/Linux-Steam-ModManager/wiki/Supported-Games)
 
 Want a game added? [Open a Game Request](https://github.com/pyromeister/Linux-Steam-ModManager/issues/new?template=game_request.yml)
+
+### Custom Game Profiles
+
+You can add support for any game without modifying the installation. Drop a JSON file into
+`~/.config/linux-mod-manager/games/` and LSMM will pick it up on next launch.
+
+Schema reference and examples: [Game Profile Schema](https://github.com/pyromeister/Linux-Steam-ModManager/wiki/Game-Profile-Schema)
 
 ---
 

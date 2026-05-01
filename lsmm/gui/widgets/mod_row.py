@@ -45,3 +45,17 @@ class ModRow(Gtk.ListBoxRow):
             sub.add_css_class("dim-label")
             sub.add_css_class("caption")
             label_box.append(sub)
+
+        nexus = mod.get("nexus")
+        if nexus:
+            parts = []
+            if nexus.get("version"):
+                parts.append(f"v{nexus['version']}")
+            if nexus.get("size_kb"):
+                parts.append(f"{nexus['size_kb'] / 1024:.1f} MB")
+            if parts:
+                meta = Gtk.Label(label="  ".join(parts))
+                meta.set_xalign(0)
+                meta.add_css_class("dim-label")
+                meta.add_css_class("caption")
+                label_box.append(meta)

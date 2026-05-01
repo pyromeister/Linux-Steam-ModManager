@@ -12,7 +12,8 @@ def show_update_results(window, updates: list, errors: list):
     lines = []
     if updates:
         lines.append("<b>Updates available:</b>")
-        for name, _old, new_ver in updates:
+        for row in updates:
+            name, new_ver = row[0], row[2]
             lines.append(f"  • {name}  →  {new_ver}")
     if errors:
         if lines:
@@ -26,4 +27,16 @@ def show_update_results(window, updates: list, errors: list):
     dialog.set_body("\n".join(lines))
     dialog.add_response("ok", "OK")
     dialog.set_default_response("ok")
+
+    if updates:
+        dialog.add_response("update_all", "Update All")
+        dialog.set_response_appearance("update_all", Adw.ResponseAppearance.SUGGESTED)
+
+        def on_response(d, response):
+            if response == "update_all":
+                from lsmm.gui.handlers.updates import update_all_async
+                update_all_async(window, updates)
+
+        dialog.connect("response", on_response)
+
     dialog.present()

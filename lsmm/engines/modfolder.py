@@ -275,7 +275,7 @@ class ModFolderEngine(BaseEngine):
                         tracked_dirs.add(rel.parts[0].removesuffix(".disabled"))
                 except ValueError:
                     pass
-            result.append({"name": mod_name, "active": active, "kind": "mod"})
+            result.append({"name": mod_name, "active": active, "kind": "mod", "nexus": entry.get("nexus")})
 
         # Show untracked subdirectories in mods_dir
         if self.mods_dir.exists():
