@@ -2,25 +2,23 @@
 """
 Linux Steam ModManager — CLI
 Usage:
-  modlauncher.py --game starfield install <archive.zip>
-  modlauncher.py --game starfield uninstall <mod_name>
-  modlauncher.py --game starfield list
-  modlauncher.py --game starfield enable <mod_name>
-  modlauncher.py --game starfield disable <mod_name>
-  modlauncher.py --game starfield order                   (show load order)
-  modlauncher.py --game starfield order <mod> <position>  (move mod)
-  modlauncher.py --game starfield setup-se                (script extender setup)
-  modlauncher.py --game starfield setup-ini               (ini setup)
-  modlauncher.py --game starfield check                   (verify paths)
-  modlauncher.py games                                    (list available games)
+  lsmm --game starfield install <archive.zip> [mod_name]
+  lsmm --game starfield uninstall <mod_name>
+  lsmm --game starfield list
+  lsmm --game starfield enable <mod_name>
+  lsmm --game starfield disable <mod_name>
+  lsmm --game starfield order                   (show load order)
+  lsmm --game starfield order <mod> <position>  (move mod)
+  lsmm --game starfield setup-se                (script extender setup)
+  lsmm --game starfield setup-ini               (ini setup)
+  lsmm --game starfield check                   (verify paths)
+  lsmm games                                    (list available games)
 """
 
 import json
 import sys
 import argparse
 from pathlib import Path
-
-# Bootstrap path
 
 from lsmm.core.config import load_profile, GAMES_DIR
 
@@ -43,12 +41,9 @@ def load_engine(game: str):
     sys.exit(1)
 
 
-# ── Commands ─────────────────────────────────────────────────────────────────
+# ── Commands ──────────────────────────────────────────────────────────────────
 
 def cmd_install(engine, args):
-    if not args.archive:
-        print("Usage: install <path/to/archive>")
-        sys.exit(1)
     archive = Path(args.archive)
     if not archive.exists():
         print(f"File not found: {archive}")
@@ -57,9 +52,6 @@ def cmd_install(engine, args):
 
 
 def cmd_uninstall(engine, args):
-    if not args.mod_name:
-        print("Usage: uninstall <mod_name>")
-        sys.exit(1)
     engine.uninstall(args.mod_name)
 
 
@@ -81,16 +73,10 @@ def cmd_list(engine, args):
 
 
 def cmd_enable(engine, args):
-    if not args.mod_name:
-        print("Usage: enable <mod_name>")
-        sys.exit(1)
     engine.enable_mod(args.mod_name)
 
 
 def cmd_disable(engine, args):
-    if not args.mod_name:
-        print("Usage: disable <mod_name>")
-        sys.exit(1)
     engine.disable_mod(args.mod_name)
 
 
@@ -99,7 +85,7 @@ def cmd_order(engine, args):
         print("This game's engine does not support load order.")
         return
     if args.mod_name and args.position is not None:
-        engine.move_mod(args.mod_name, int(args.position))
+        engine.move_mod(args.mod_name, args.position)
         print(f"✓ Moved '{args.mod_name}' to position {args.position}")
     else:
         order = engine.get_load_order()
@@ -153,15 +139,61 @@ COMMANDS = {
 }
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Linux Steam ModManager")
-    parser.add_argument("--game", default="starfield", help="Game profile name")
-    parser.add_argument("command", choices=list(COMMANDS.keys()))
-    parser.add_argument("archive", nargs="?", help="Archive path (install)")
-    parser.add_argument("mod_name", nargs="?", help="Mod name")
-    parser.add_argument("name", nargs="?", help="Override mod name on install")
-    parser.add_argument("position", nargs="?", help="Position for order command")
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="lsmm",
+        description="Linux Steam ModManager",
+    )
+    parser.add_argument(
+        "--game", default="starfield", metavar="GAME",
+        help="Game profile slug (default: starfield)",
+    )
 
+    sub = parser.add_subparsers(dest="command", metavar="COMMAND")
+    sub.required = True
+
+    # install
+    p = sub.add_parser("install", help="Install a mod from an archive")
+    p.add_argument("archive", help="Path to the archive file")
+    p.add_argument("name", nargs="?", help="Override the mod name")
+
+    # uninstall
+    p = sub.add_parser("uninstall", help="Remove an installed mod")
+    p.add_argument("mod_name", help="Mod name")
+
+    # list
+    sub.add_parser("list", help="List installed mods and load order")
+
+    # enable
+    p = sub.add_parser("enable", help="Enable a mod")
+    p.add_argument("mod_name", help="Mod name")
+
+    # disable
+    p = sub.add_parser("disable", help="Disable a mod")
+    p.add_argument("mod_name", help="Mod name")
+
+    # order
+    p = sub.add_parser("order", help="Show or change load order")
+    p.add_argument("mod_name", nargs="?", help="Mod to move")
+    p.add_argument("position", nargs="?", type=int, help="Target position (0-based)")
+
+    # setup-se
+    sub.add_parser("setup-se", help="Set up the script extender")
+
+    # setup-ini
+    sub.add_parser("setup-ini", help="Set up INI files")
+
+    # check
+    sub.add_parser("check", help="Verify installation paths")
+
+    # games
+    sub.add_parser("games", help="List available game profiles")
+
+    return parser
+
+
+def main():
+    parser = _build_parser()
     args = parser.parse_args()
 
     if args.command == "games":

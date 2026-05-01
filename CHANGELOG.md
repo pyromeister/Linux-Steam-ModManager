@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **CLI subcommands** — `lsmm` now uses `argparse` subparsers instead of flat positional args.
+  Each subcommand validates its own required args; missing args now produce an argparse error
+  with exit code 2 instead of silently doing nothing.
+
+  **Migration:** invocations using positional args still work unchanged.
+  The only change: `lsmm` (no subcommand) → error instead of confusing usage.
+
 ### Fixed
 - **SMAPI launch after auto-install** — `StardewModdingAPI.deps.json` was missing after `setup_framework()` extracted `install.dat`. The dotnet apphost fell into split/FX mode and showed help text instead of launching. Fix: copy `Stardew Valley.deps.json` to `StardewModdingAPI.deps.json` post-extraction so the host can resolve assemblies correctly.
 
