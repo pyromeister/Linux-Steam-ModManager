@@ -16,7 +16,6 @@ from gi.repository import Adw, Gdk, Gtk, Gio
 ROOT = Path(__file__).parent.parent.parent
 
 from lsmm.core.config import LOG_PATH
-from lsmm.core.utils import find_game_by_nexus_domain
 from lsmm.gui.window import ModManagerWindow
 
 

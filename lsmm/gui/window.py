@@ -7,8 +7,7 @@ from pathlib import Path
 import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-gi.require_version("Pango", "1.0")
-from gi.repository import Adw, GLib, Gtk, Gio, Pango
+from gi.repository import Adw, GLib, Gtk, Gio
 
 from lsmm.core.config import (
     get_steam_root, get_steam_candidates,
@@ -20,7 +19,6 @@ from lsmm.core.utils import (
     find_game_by_nexus_domain as _find_game_by_nexus_domain,
 )
 from lsmm.gui.widgets.mod_row import ModRow
-from lsmm.gui.widgets.plugin_row import PluginRow
 from lsmm.gui.handlers.install import install_batch, do_uninstall
 from lsmm.gui.handlers.nxm import do_nxm_import
 from lsmm.gui.handlers.updates import do_check_updates
