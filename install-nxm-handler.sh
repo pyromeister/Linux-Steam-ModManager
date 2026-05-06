@@ -8,10 +8,19 @@ DESKTOP_FILE="$DESKTOP_DIR/linux-mod-manager.desktop"
 
 mkdir -p "$DESKTOP_DIR"
 
+# Prefer PATH, then ~/.local/bin (for non-login shells), then legacy shim
+if command -v lsmm-gui &>/dev/null; then
+    LSMM_GUI="lsmm-gui"
+elif [ -x "$HOME/.local/bin/lsmm-gui" ]; then
+    LSMM_GUI="$HOME/.local/bin/lsmm-gui"
+else
+    LSMM_GUI="python3 $SCRIPT_DIR/modlauncher-gui.py"
+fi
+
 cat > "$DESKTOP_FILE" <<EOF
 [Desktop Entry]
 Name=Linux Steam ModManager
-Exec=python3 $SCRIPT_DIR/modlauncher-gui.py %u
+Exec=$LSMM_GUI %u
 Type=Application
 MimeType=x-scheme-handler/nxm;
 NoDisplay=false
@@ -43,5 +52,5 @@ for cmd in kbuildsycoca6 kbuildsycoca5; do
     fi
 done
 
-echo "✓ NXM handler registered."
+echo "✓ NXM handler registered: $LSMM_GUI"
 echo "Note: restart your browser for the changes to take effect."
