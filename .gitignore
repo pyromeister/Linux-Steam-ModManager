@@ -36,8 +36,14 @@ gitstructure.md
 # Dev-only folders (local, never in clone)
 scripts/
 Plans/
+dev-tools/
 Makefile
 .pytest_cache/
+
+# Test coverage
+.coverage
+.coverage.*
+htmlcov/
 
 # Dev-only docs folder (fully local, never in clone)
 docs/*
