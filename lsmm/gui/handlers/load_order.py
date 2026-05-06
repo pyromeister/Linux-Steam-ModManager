@@ -24,10 +24,6 @@ def _glib():
 def build_load_order_panel(win) -> Gtk.Box:
     """Build the load order column panel, setting win.plugins_list."""
     panel = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-    panel.set_size_request(300, -1)
-
-    sep = Gtk.Separator(orientation=Gtk.Orientation.VERTICAL)
-    panel.append(sep)
 
     inner = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
     panel.append(inner)

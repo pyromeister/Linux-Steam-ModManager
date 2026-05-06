@@ -30,22 +30,46 @@ def build_games_panel(win) -> Gtk.Box:
     header_label.set_margin_bottom(8)
     panel.append(header_label)
 
+    win._games_search = Gtk.SearchEntry()
+    win._games_search.set_placeholder_text("Search games…")
+    win._games_search.set_margin_start(12)
+    win._games_search.set_margin_end(12)
+    win._games_search.set_margin_bottom(8)
+
+    def _on_games_search_changed(entry):
+        win._games_search_query = entry.get_text().strip().lower()
+        win.games_list.invalidate_filter()
+
+    win._games_search.connect("search-changed", _on_games_search_changed)
+    panel.append(win._games_search)
+
     scroll = Gtk.ScrolledWindow()
     scroll.set_vexpand(True)
     scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
     panel.append(scroll)
 
+    win._games_search_query = ""
+
+    def _games_filter(row):
+        q = win._games_search_query
+        if not q:
+            return True
+        label = row.get_child()
+        name = label.get_label().lower() if label else ""
+        return q in name or q in getattr(row, "_slug", "").replace("_", " ")
+
     win.games_list = Gtk.ListBox()
     win.games_list.set_selection_mode(Gtk.SelectionMode.SINGLE)
     win.games_list.add_css_class("boxed-list")
-    win.games_list.set_margin_start(8)
-    win.games_list.set_margin_end(8)
+    win.games_list.set_margin_start(12)
+    win.games_list.set_margin_end(12)
+    win.games_list.set_filter_func(_games_filter)
     win.games_list.connect("row-activated", lambda lb, row: on_game_row_activated(win, row))
     scroll.set_child(win.games_list)
 
     btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-    btn_box.set_margin_start(8)
-    btn_box.set_margin_end(8)
+    btn_box.set_margin_start(12)
+    btn_box.set_margin_end(12)
     btn_box.set_margin_top(8)
     btn_box.set_margin_bottom(10)
 

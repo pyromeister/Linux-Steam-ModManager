@@ -56,6 +56,8 @@ class ModManagerWindow(Adw.ApplicationWindow):
 
         self._build_ui()
         self._update_setup_btn()
+        self._update_action_sensitivity()
+        self._refresh_mods()
         GLib.idle_add(self._init_steam_path)
         threading.Thread(target=self._check_for_update, daemon=True).start()
 
@@ -97,9 +99,17 @@ class ModManagerWindow(Adw.ApplicationWindow):
 
         self._sidebar_btn = Gtk.ToggleButton()
         self._sidebar_btn.set_icon_name("sidebar-show-symbolic")
-        self._sidebar_btn.set_tooltip_text("Toggle game list")
+        self._sidebar_btn.set_tooltip_text("Toggle game list (F9)")
         self._sidebar_btn.set_active(True)
         header.pack_start(self._sidebar_btn)
+
+        toggle_action = Gio.SimpleAction.new("toggle-sidebar", None)
+        toggle_action.connect(
+            "activate",
+            lambda a, p: self._sidebar_btn.set_active(not self._sidebar_btn.get_active()),
+        )
+        self.add_action(toggle_action)
+        self.get_application().set_accels_for_action("win.toggle-sidebar", ["F9"])
 
         self._profiles_popover_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         self._profiles_popover_box.set_margin_start(12)
@@ -118,13 +128,21 @@ class ModManagerWindow(Adw.ApplicationWindow):
         profiles_menu_btn.set_popover(profiles_popover)
         header.pack_start(profiles_menu_btn)
 
-        self.mods_content_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
-        self.mods_content_box.append(self._build_mods_panel())
+        self._view_stack = Adw.ViewStack()
+        self._view_stack.set_vexpand(True)
+        self._view_stack.add_titled_with_icon(
+            self._build_mods_panel(), "mods", "Mods", "package-x-generic-symbolic"
+        )
+        self.load_order_panel = build_load_order_panel(self)
+        self._lo_page = self._view_stack.add_titled_with_icon(
+            self.load_order_panel, "load-order", "Load Order", "view-sort-descending-symbolic"
+        )
+        self._lo_page.set_visible(False)
 
         split_view = Adw.OverlaySplitView()
         split_view.set_vexpand(True)
         split_view.set_sidebar(build_games_panel(self))
-        split_view.set_content(self.mods_content_box)
+        split_view.set_content(self._view_stack)
         split_view.set_sidebar_position(Gtk.PackType.START)
         root.append(split_view)
 
@@ -133,7 +151,10 @@ class ModManagerWindow(Adw.ApplicationWindow):
             GObject.BindingFlags.BIDIRECTIONAL | GObject.BindingFlags.SYNC_CREATE,
         )
 
-        self.load_order_panel = build_load_order_panel(self)
+        self._view_switcher_bar = Adw.ViewSwitcherBar()
+        self._view_switcher_bar.set_stack(self._view_stack)
+        self._view_switcher_bar.set_reveal(False)
+        root.append(self._view_switcher_bar)
 
         status_bar = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
 
@@ -209,6 +230,7 @@ class ModManagerWindow(Adw.ApplicationWindow):
         self._refresh_mods()
         self._refresh_load_order()
         self._update_setup_btn()
+        self._update_action_sensitivity()
         self.launch_btn.set_sensitive(bool(self.engine.profile.get("steam_app_id")))
 
     # ── Steam path setup ──────────────────────────────────────────────────────
@@ -227,12 +249,9 @@ class ModManagerWindow(Adw.ApplicationWindow):
             GLib.idle_add(self._handle_startup_nxm, nxm_url)
 
     def _update_load_order_panel(self):
-        if self.engine.has_load_order:
-            if self.load_order_panel.get_parent() is None:
-                self.mods_content_box.append(self.load_order_panel)
-        else:
-            if self.load_order_panel.get_parent() is not None:
-                self.mods_content_box.remove(self.load_order_panel)
+        has_lo = self.engine.has_load_order
+        self._lo_page.set_visible(has_lo)
+        self._view_switcher_bar.set_reveal(has_lo)
 
     # ── Mods panel ────────────────────────────────────────────────────────────
 
@@ -268,10 +287,18 @@ class ModManagerWindow(Adw.ApplicationWindow):
         self.mods_search.connect("search-changed", self._on_mods_search_changed)
         panel.append(self.mods_search)
 
+        self.mods_content_stack = Gtk.Stack()
+        self.mods_content_stack.set_vexpand(True)
+        self.mods_content_stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
+
+        empty_status = Adw.StatusPage()
+        empty_status.set_icon_name("package-x-generic-symbolic")
+        empty_status.set_title("No mods installed")
+        empty_status.set_description("Select a game and click + Install to add mods")
+        self.mods_content_stack.add_named(empty_status, "empty")
+
         scroll = Gtk.ScrolledWindow()
-        scroll.set_vexpand(True)
         scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
-        panel.append(scroll)
 
         self.mods_list = Gtk.ListBox()
         self.mods_list.set_selection_mode(Gtk.SelectionMode.SINGLE)
@@ -280,40 +307,55 @@ class ModManagerWindow(Adw.ApplicationWindow):
         self.mods_list.set_margin_end(12)
         self.mods_list.set_filter_func(self._mods_filter_func)
         scroll.set_child(self.mods_list)
+        self.mods_content_stack.add_named(scroll, "list")
 
-        self.empty_label = Gtk.Label(label="No mods installed")
-        self.empty_label.add_css_class("dim-label")
-        self.empty_label.set_margin_top(48)
+        panel.append(self.mods_content_stack)
 
         btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         btn_box.set_margin_start(12)
         btn_box.set_margin_end(12)
-        btn_box.set_margin_top(8)
+        btn_box.set_margin_top(12)
         btn_box.set_margin_bottom(12)
 
-        install_btn = Gtk.Button(label="+ Install")
-        install_btn.add_css_class("suggested-action")
-        install_btn.connect("clicked", self._on_install)
-        install_btn.set_hexpand(True)
-        btn_box.append(install_btn)
+        self.install_btn = Gtk.Button(label="+ Install")
+        self.install_btn.add_css_class("suggested-action")
+        self.install_btn.connect("clicked", self._on_install)
+        self.install_btn.set_hexpand(True)
+        self.install_btn.set_sensitive(False)
+        btn_box.append(self.install_btn)
 
         self.uninstall_btn = Gtk.Button(label="- Uninstall")
         self.uninstall_btn.add_css_class("destructive-action")
         self.uninstall_btn.connect("clicked", self._on_uninstall)
         self.uninstall_btn.set_hexpand(True)
+        self.uninstall_btn.set_sensitive(False)
         btn_box.append(self.uninstall_btn)
 
-        nxm_btn = Gtk.Button(label="NXM URL")
+        more_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        more_box.set_margin_start(8)
+        more_box.set_margin_end(8)
+        more_box.set_margin_top(8)
+        more_box.set_margin_bottom(8)
+
+        nxm_btn = Gtk.Button(label="Import from Nexus…")
         nxm_btn.set_tooltip_text("Import mod via Nexus nxm:// link")
         nxm_btn.connect("clicked", self._on_nxm_import)
-        nxm_btn.set_hexpand(True)
-        btn_box.append(nxm_btn)
+        more_box.append(nxm_btn)
 
         update_btn = Gtk.Button(label="Check Updates")
         update_btn.set_tooltip_text("Check Nexus Mods for updates to installed mods")
         update_btn.connect("clicked", self._on_check_updates)
-        update_btn.set_hexpand(True)
-        btn_box.append(update_btn)
+        more_box.append(update_btn)
+
+        more_popover = Gtk.Popover()
+        more_popover.set_child(more_box)
+
+        self.more_btn = Gtk.MenuButton()
+        self.more_btn.set_icon_name("view-more-symbolic")
+        self.more_btn.set_tooltip_text("More actions")
+        self.more_btn.set_popover(more_popover)
+        self.more_btn.set_sensitive(False)
+        btn_box.append(self.more_btn)
 
         panel.append(btn_box)
         return panel
@@ -324,17 +366,22 @@ class ModManagerWindow(Adw.ApplicationWindow):
         while child := self.mods_list.get_first_child():
             self.mods_list.remove(child)
 
+        if not self.engine:
+            self.mods_content_stack.set_visible_child_name("empty")
+            return
+
         try:
             mods = self.engine.list_mods()
         except Exception as e:
             self._toast(f"Could not load mod list: {e}")
-            self.mods_list.append(self.empty_label)
+            self.mods_content_stack.set_visible_child_name("empty")
             return
 
         if not mods:
-            self.mods_list.append(self.empty_label)
+            self.mods_content_stack.set_visible_child_name("empty")
             return
 
+        self.mods_content_stack.set_visible_child_name("list")
         for mod in sorted(mods, key=lambda m: m["name"].lower()):
             row = ModRow(mod, self._on_toggle_mod)
             self.mods_list.append(row)
@@ -393,9 +440,14 @@ class ModManagerWindow(Adw.ApplicationWindow):
 
     # ── Install ───────────────────────────────────────────────────────────────
 
+    def _update_action_sensitivity(self):
+        has_engine = self.engine is not None
+        self.install_btn.set_sensitive(has_engine)
+        self.uninstall_btn.set_sensitive(has_engine)
+        self.more_btn.set_sensitive(has_engine)
+
     def _on_install(self, _btn):
         if not self.engine:
-            self._toast("Select a game first")
             return
         dialog = Gtk.FileDialog()
         dialog.set_title("Select mod archives")
@@ -422,7 +474,6 @@ class ModManagerWindow(Adw.ApplicationWindow):
 
     def _on_uninstall(self, _btn):
         if not self.engine:
-            self._toast("Select a game first")
             return
         row = self.mods_list.get_selected_row()
         if not row or not isinstance(row, ModRow):
@@ -483,7 +534,6 @@ class ModManagerWindow(Adw.ApplicationWindow):
 
     def _on_nxm_import(self, _btn):
         if not self.engine:
-            self._toast("Select a game first")
             return
 
         api_key = get_nexus_api_key()
@@ -516,7 +566,6 @@ class ModManagerWindow(Adw.ApplicationWindow):
 
     def _on_check_updates(self, _btn):
         if not self.engine:
-            self._toast("Select a game first")
             return
         api_key = get_nexus_api_key()
         if not api_key:
@@ -563,8 +612,9 @@ class ModManagerWindow(Adw.ApplicationWindow):
 
     def _update_setup_btn(self):
         if not self.engine:
-            self.setup_btn.set_label("Setup SE")
+            self.setup_btn.set_label("Script Extender")
             self.setup_btn.set_sensitive(False)
+            self.setup_btn.set_tooltip_text("Select a game first")
             return
         self.setup_btn.set_sensitive(True)
         if getattr(self.engine, "has_framework_setup", False):
@@ -576,11 +626,12 @@ class ModManagerWindow(Adw.ApplicationWindow):
                 else f"Download and install {fw} into the game folder"
             )
         elif self.engine.has_script_extender:
-            self.setup_btn.set_label("Setup SE")
+            self.setup_btn.set_label("Script Extender")
             self.setup_btn.set_tooltip_text("Create the script extender launch wrapper")
         else:
-            self.setup_btn.set_label("Setup SE")
+            self.setup_btn.set_label("Script Extender")
             self.setup_btn.set_sensitive(False)
+            self.setup_btn.set_tooltip_text("No script extender for this game")
 
     def _on_setup_btn(self, _btn):
         setup_handler.handle_setup_btn(self)
