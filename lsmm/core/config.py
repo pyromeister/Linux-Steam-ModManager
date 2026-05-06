@@ -93,23 +93,31 @@ def _parse_library_paths(vdf_path: Path) -> list[Path]:
     """Extract all 'path' values from libraryfolders.vdf (regex, no full VDF parser needed)."""
     if not vdf_path.exists():
         return []
-    content = vdf_path.read_text(encoding="utf-8")
+    content = vdf_path.read_text(encoding="utf-8", errors="replace")
     return [Path(p) for p in re.findall(r'"path"\s+"([^"]+)"', content)]
+
+
+def get_all_library_paths(steam_root: Path | None = None) -> list[Path]:
+    """Return all Steam library paths from libraryfolders.vdf, including SD card libraries.
+    Pass steam_root to avoid a redundant filesystem scan; omit to auto-detect."""
+    root = steam_root if steam_root is not None else get_steam_root()
+    if root is None:
+        return []
+    return _parse_library_paths(root / "steamapps/libraryfolders.vdf")
 
 
 def find_library_for_app(app_id: str | int) -> Path | None:
     """
     Return the Steam library folder that contains the given app ID,
     detected via appmanifest_{app_id}.acf presence.
-    Searches all libraries listed in libraryfolders.vdf.
+    Searches all libraries listed in libraryfolders.vdf, including SD card libraries.
     Falls back to the Steam root itself if no manifest found.
     """
     steam_root = get_steam_root()
     if steam_root is None:
         return None
 
-    vdf = steam_root / "steamapps/libraryfolders.vdf"
-    libraries = _parse_library_paths(vdf) or [steam_root]
+    libraries = get_all_library_paths(steam_root) or [steam_root]
 
     for lib in libraries:
         if (lib / f"steamapps/appmanifest_{app_id}.acf").exists():
