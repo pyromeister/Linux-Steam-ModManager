@@ -11,7 +11,18 @@ from pathlib import Path
 import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gdk, Gtk, Gio
+from gi.repository import Adw, Gdk, GLib, Gtk, Gio
+
+
+def _install_log_filter() -> None:
+    # Suppress the "gtk-application-prefer-dark-theme" warning that fires when
+    # the system gtk-4.0/settings.ini still contains that deprecated key.
+    # This app uses AdwStyleManager correctly; the warning is a false positive.
+    def _filter(domain, level, message, data):
+        if "gtk-application-prefer-dark-theme" not in (message or ""):
+            GLib.log_default_handler(domain, level, message, None)
+    GLib.log_set_handler("Adwaita", GLib.LogLevelFlags.LEVEL_WARNING, _filter, None)
+
 
 ROOT = Path(__file__).parent.parent.parent
 
@@ -64,5 +75,6 @@ class ModManagerApp(Adw.Application):
 
 def main():
     _setup_logging()
+    _install_log_filter()
     app = ModManagerApp()
     app.run(sys.argv)
