@@ -48,14 +48,34 @@ class ModRow(Gtk.ListBoxRow):
 
         nexus = mod.get("nexus")
         if nexus:
-            parts = []
+            meta_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            meta_row.set_halign(Gtk.Align.START)
+
+            mod_id = nexus.get("mod_id")
+            game_domain = nexus.get("game_domain")
+            if mod_id and game_domain:
+                link = Gtk.LinkButton.new_with_label(
+                    f"https://www.nexusmods.com/{game_domain}/mods/{mod_id}",
+                    f"Nexus #{mod_id}",
+                )
+                link.set_valign(Gtk.Align.CENTER)
+                link.add_css_class("caption")
+                # Strip default LinkButton padding so it sits flush in the meta row
+                link.set_has_frame(False)
+                meta_row.append(link)
+
+            text_parts = []
             if nexus.get("version"):
-                parts.append(f"v{nexus['version']}")
+                text_parts.append(f"v{nexus['version']}")
             if nexus.get("size_kb"):
-                parts.append(f"{nexus['size_kb'] / 1024:.1f} MB")
-            if parts:
-                meta = Gtk.Label(label="  ".join(parts))
+                text_parts.append(f"{nexus['size_kb'] / 1024:.1f} MB")
+            if text_parts:
+                meta = Gtk.Label(label="  ".join(text_parts))
                 meta.set_xalign(0)
+                meta.set_valign(Gtk.Align.CENTER)
                 meta.add_css_class("dim-label")
                 meta.add_css_class("caption")
-                label_box.append(meta)
+                meta_row.append(meta)
+
+            if meta_row.get_first_child() is not None:
+                label_box.append(meta_row)
