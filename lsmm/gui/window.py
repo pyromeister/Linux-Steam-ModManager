@@ -622,8 +622,16 @@ class ModManagerWindow(Adw.ApplicationWindow):
                 else f"Download and install {fw} into the game folder"
             )
         elif self.engine.has_script_extender:
-            self.setup_btn.set_label("Script Extender")
-            self.setup_btn.set_tooltip_text("Create the script extender launch wrapper")
+            se = self.engine.profile.get("script_extender", {})
+            se_name = se.get("name", "Script Extender")
+            paths = getattr(self.engine, "paths", None)
+            se_installed = bool(paths and paths.se_loader and paths.se_loader.exists())
+            self.setup_btn.set_label(f"{se_name} ✓" if se_installed else se_name)
+            self.setup_btn.set_tooltip_text(
+                f"{se_name} is installed — click to (re)create the Steam launch wrapper"
+                if se_installed else
+                f"Download {se_name} and extract to the game folder, then click here to create the launch wrapper"
+            )
         else:
             self.setup_btn.set_label("Script Extender")
             self.setup_btn.set_sensitive(False)
