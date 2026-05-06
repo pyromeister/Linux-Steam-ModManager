@@ -46,13 +46,23 @@ def temp_extract_dir():
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def _safe_extract_zip(z: zipfile.ZipFile, dest: Path) -> None:
+    """Extract zip members only if they resolve inside dest (blocks path traversal)."""
+    dest = dest.resolve()
+    for member in z.infolist():
+        target = (dest / member.filename).resolve()
+        if not target.is_relative_to(dest):
+            raise ValueError(f"Path traversal blocked: {member.filename!r}")
+        z.extract(member, dest)
+
+
 def extract(archive_path: Path, dest: Path) -> None:
     """Extract archive_path into dest directory. Supports zip, 7z, rar."""
     suffix = archive_path.suffix.lower()
     if suffix == ".zip":
         with zipfile.ZipFile(archive_path) as z:
-            z.extractall(dest)
-    elif suffix in (".7z", ".rar"):
+            _safe_extract_zip(z, dest)
+    elif suffix in (".7z", ".rar"):  # 7z strips leading / and .. by default
         result = subprocess.run(
             ["7z", "x", str(archive_path), f"-o{dest}", "-y"],
             capture_output=True,
