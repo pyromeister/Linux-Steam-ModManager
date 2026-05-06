@@ -3,7 +3,7 @@ import threading
 import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import GLib, Gtk
+from gi.repository import Adw, GLib, Gtk
 
 from lsmm.core import profiles as prof
 from lsmm.core.config import get_nexus_api_key
@@ -65,6 +65,9 @@ def rebuild_profiles_popover(window, popover):
 
         profile_names = list(all_profiles.keys())
         dropdown = Gtk.DropDown.new_from_strings(profile_names)
+        active_name = prof.get_active(slug)
+        if active_name in profile_names:
+            dropdown.set_selected(profile_names.index(active_name))
         box.append(dropdown)
 
         btn_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
@@ -84,6 +87,8 @@ def rebuild_profiles_popover(window, popover):
         def do_delete(_btn):
             name = profile_names[dropdown.get_selected()]
             prof.delete(slug, name)
+            if prof.get_active(slug) == name:
+                prof.set_active(slug, None)
             window._toast(f"Deleted profile: {name}")
             popover.popdown()
 
@@ -97,16 +102,26 @@ def rebuild_profiles_popover(window, popover):
                       collection_game_domain=existing.get("collection_game_domain"))
             window._toast(f"Saved: {name}")
             popover.popdown()
+            window._update_active_set_label()
 
         update_btn = Gtk.Button(label="Save")
         update_btn.add_css_class("suggested-action")
         update_btn.set_hexpand(True)
 
+        def do_rename(_btn):
+            name = profile_names[dropdown.get_selected()]
+            _show_rename_dialog(window, popover, slug, name)
+
+        rename_btn = Gtk.Button(label="Rename")
+        rename_btn.set_hexpand(True)
+
         load_btn.connect("clicked", do_load)
         del_btn.connect("clicked", do_delete)
         update_btn.connect("clicked", do_update)
+        rename_btn.connect("clicked", do_rename)
         btn_row.append(load_btn)
         btn_row.append(update_btn)
+        btn_row.append(rename_btn)
         btn_row.append(del_btn)
         box.append(btn_row)
 
@@ -185,6 +200,44 @@ def on_import_collection(window, url: str):
     threading.Thread(target=run, daemon=True).start()
 
 
+def _show_rename_dialog(window, popover, slug: str, old_name: str):
+    dialog = Adw.MessageDialog(
+        transient_for=window,
+        heading="Rename Mod Set",
+    )
+    entry = Gtk.Entry()
+    entry.set_text(old_name)
+    entry.set_activates_default(True)
+    entry.set_margin_start(16)
+    entry.set_margin_end(16)
+    entry.set_margin_bottom(8)
+    dialog.set_extra_child(entry)
+    dialog.add_response("cancel", "Cancel")
+    dialog.add_response("rename", "Rename")
+    dialog.set_response_appearance("rename", Adw.ResponseAppearance.SUGGESTED)
+    dialog.set_default_response("rename")
+    dialog.set_close_response("cancel")
+
+    def on_response(_d, response):
+        if response != "rename":
+            return
+        new_name = entry.get_text().strip()
+        if not new_name:
+            window._toast("Name cannot be empty")
+            return
+        try:
+            prof.rename(slug, old_name, new_name)
+        except ValueError as e:
+            window._toast(str(e))
+            return
+        popover.popdown()
+        window._update_active_set_label()
+        window._toast(f"Renamed to: {new_name}")
+
+    dialog.connect("response", on_response)
+    dialog.present()
+
+
 def apply_profile(window, slug: str, name: str):
     data = prof.get(slug, name)
     if not data:
@@ -203,6 +256,7 @@ def apply_profile(window, slug: str, name: str):
     if order and window.engine.has_load_order:
         window.engine.set_load_order(order)
 
+    prof.set_active(slug, name)
     window._refresh_mods()
     window._refresh_load_order()
     window._toast(f"Loaded profile: {name}")

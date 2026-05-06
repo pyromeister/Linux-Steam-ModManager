@@ -27,6 +27,7 @@ from lsmm.gui.handlers.collection import rebuild_profiles_popover
 from lsmm.gui.handlers.games import build_games_panel, refresh_games
 from lsmm.gui.handlers.load_order import build_load_order_panel, refresh_load_order
 from lsmm.gui.handlers import setup as setup_handler
+from lsmm.core import profiles as _prof
 from lsmm.gui.dialogs.api_key import show_api_key_dialog, show_nxm_api_key_hint
 from lsmm.gui.dialogs.steam_path import show_steam_path_dialog
 from lsmm.gui.dialogs.first_run import show_first_run_wizard
@@ -239,11 +240,25 @@ class ModManagerWindow(Adw.ApplicationWindow):
         panel = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         panel.set_size_request(680, -1)
 
+        header_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        header_box.set_margin_top(12)
+        header_box.set_margin_bottom(8)
+        header_box.set_margin_start(12)
+        header_box.set_margin_end(12)
+
         header_label = Gtk.Label(label="Installed Mods")
         header_label.add_css_class("heading")
-        header_label.set_margin_top(12)
-        header_label.set_margin_bottom(8)
-        panel.append(header_label)
+        header_label.set_hexpand(True)
+        header_label.set_xalign(0)
+        header_box.append(header_label)
+
+        self.active_set_label = Gtk.Label(label="No active set")
+        self.active_set_label.add_css_class("dim-label")
+        self.active_set_label.add_css_class("caption")
+        self.active_set_label.set_valign(Gtk.Align.CENTER)
+        header_box.append(self.active_set_label)
+
+        panel.append(header_box)
 
         self.mods_search = Gtk.SearchEntry()
         self.mods_search.set_placeholder_text("Search mods…")
@@ -324,6 +339,24 @@ class ModManagerWindow(Adw.ApplicationWindow):
             row = ModRow(mod, self._on_toggle_mod)
             self.mods_list.append(row)
 
+        self._update_active_set_label()
+
+    def _update_active_set_label(self):
+        if not self._game_slug:
+            self.active_set_label.set_text("No active set")
+            return
+        name = _prof.get_active(self._game_slug)
+        if not name:
+            self.active_set_label.set_text("No active set")
+            return
+        try:
+            mods = self.engine.list_mods() if self.engine else []
+        except Exception:
+            mods = []
+        current = [m["name"] for m in mods if m.get("active")]
+        dirty = _prof.is_dirty(self._game_slug, name, current)
+        self.active_set_label.set_text(f"Set: {name}{'*' if dirty else ''}")
+
     def _mods_filter_func(self, row: Gtk.ListBoxRow) -> bool:
         query = self.mods_search.get_text().strip().lower()
         if not query:
@@ -355,6 +388,7 @@ class ModManagerWindow(Adw.ApplicationWindow):
                 self.engine.enable_mod(mod_name)
             else:
                 self.engine.disable_mod(mod_name)
+            GLib.idle_add(self._update_active_set_label)
         threading.Thread(target=run, daemon=True).start()
 
     # ── Install ───────────────────────────────────────────────────────────────
