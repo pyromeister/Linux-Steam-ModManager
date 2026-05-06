@@ -29,6 +29,7 @@ from lsmm.gui.handlers.load_order import build_load_order_panel, refresh_load_or
 from lsmm.gui.handlers import setup as setup_handler
 from lsmm.gui.dialogs.api_key import show_api_key_dialog, show_nxm_api_key_hint
 from lsmm.gui.dialogs.steam_path import show_steam_path_dialog
+from lsmm.gui.dialogs.first_run import show_first_run_wizard
 from lsmm.gui.dialogs.help import show_help_dialog
 
 
@@ -200,7 +201,11 @@ class ModManagerWindow(Adw.ApplicationWindow):
 
     def _init_steam_path(self):
         self._refresh_games()
-        if get_steam_root() is None:
+        if get_steam_root() is None and get_nexus_api_key() is None:
+            # Truly first run — walk the user through full setup.
+            show_first_run_wizard(self)
+        elif get_steam_root() is None:
+            # Returning user with API key already set, but Steam root missing.
             show_steam_path_dialog(self, get_steam_candidates())
         if self._pending_nxm:
             nxm_url = self._pending_nxm
