@@ -65,10 +65,13 @@ class ModManagerApp(Adw.Application):
     def _on_command_line(self, app, command_line):
         args = command_line.get_arguments()
         nxm_url = next((a for a in args[1:] if a.lower().startswith("nxm://")), None)
-        if self._window is None:
+        already_running = self._window is not None
+        if not already_running:
             self._pending_nxm_for_activate = nxm_url
         self.activate()
-        if nxm_url and self._window:
+        # Only call handle_nxm_url if the window was already open — otherwise
+        # _pending_nxm_for_activate handles it to avoid processing the URL twice.
+        if nxm_url and already_running and self._window:
             self._window.handle_nxm_url(nxm_url)
         return 0
 

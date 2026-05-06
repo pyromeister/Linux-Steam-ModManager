@@ -565,7 +565,8 @@ class ModManagerWindow(Adw.ApplicationWindow):
     # ── Profiles ──────────────────────────────────────────────────────────────
 
     def _get_installed_nexus_mod_ids(self, game_slug: str) -> set:
-        """Return set of nexus mod_ids installed for this game (from manifest)."""
+        """Return set of nexus mod_ids installed for this game.
+        Combines lsmm manifest entries with engine filesystem scan (e.g. SMAPI UpdateKeys)."""
         from lsmm.core.installer import load_manifest
         manifest = load_manifest()
         ids: set = set()
@@ -579,6 +580,8 @@ class ModManagerWindow(Adw.ApplicationWindow):
             hit = re.search(r"-(\d{4,})-\d+(?:-\d+)*$", mod_name)
             if hit:
                 ids.add(int(hit.group(1)))
+        if self.engine and hasattr(self.engine, "filesystem_nexus_ids"):
+            ids |= self.engine.filesystem_nexus_ids()
         return ids
 
     # ── Header actions ────────────────────────────────────────────────────────

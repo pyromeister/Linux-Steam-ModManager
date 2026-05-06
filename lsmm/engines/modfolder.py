@@ -8,6 +8,7 @@ No framework setup, no load order (handled by the game / mod loader itself).
 import io
 import json
 import logging
+import re
 import shutil
 import stat
 import urllib.error
@@ -294,6 +295,27 @@ class ModFolderEngine(BaseEngine):
                     })
 
         return result
+
+    # ── Nexus ID detection (SMAPI UpdateKeys) ─────────────────────────────────
+
+    def filesystem_nexus_ids(self) -> set[int]:
+        """Return nexus mod IDs from SMAPI manifest.json UpdateKeys in the Mods dir.
+        Covers mods installed outside lsmm (e.g. via SMAPI installer or manually)."""
+        ids: set[int] = set()
+        if not self.mods_dir.exists():
+            return ids
+        for manifest_path in self.mods_dir.glob("*/manifest.json"):
+            try:
+                raw = manifest_path.read_text(encoding="utf-8", errors="replace")
+                raw = re.sub(r"//[^\n]*", "", raw)  # strip // comments (SMAPI allows them)
+                data = json.loads(raw)
+                for key in data.get("UpdateKeys") or []:
+                    m = re.match(r"Nexus:(\d+)", str(key), re.I)
+                    if m:
+                        ids.add(int(m.group(1)))
+            except Exception:
+                pass
+        return ids
 
     # ── Activation ────────────────────────────────────────────────────────────
 
