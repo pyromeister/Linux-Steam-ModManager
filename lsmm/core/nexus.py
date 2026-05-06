@@ -22,6 +22,18 @@ class NxmExpiredError(RuntimeError):
     """Raised when an NXM link's expiry timestamp is in the past."""
 
 
+def nxm_error_message(exc: Exception) -> str:
+    """Format a user-facing error string for an NXM download failure."""
+    msg = str(exc)
+    if "403" in msg:
+        return "Nexus API key invalid or missing — get one at nexusmods.com → Account → API Keys"
+    if "404" in msg:
+        return "Mod or file not found on Nexus (may have been removed or made private)"
+    if "410" in msg:
+        return "This file has been permanently removed from Nexus Mods"
+    return f"NXM import failed: {exc}"
+
+
 def check_nxm_expiry(nxm: dict) -> None:
     """Raise NxmExpiredError if the NXM link has expired."""
     expires = nxm.get("expires")

@@ -8,34 +8,9 @@ from gi.repository import GLib
 
 from lsmm.core.config import ARCHIVES_DIR
 from lsmm.core.installer import ConflictError
-from lsmm.core.nexus import NxmExpiredError
+from lsmm.core.nexus import NxmExpiredError, nxm_error_message as _nxm_error_message
 
 logger = logging.getLogger(__name__)
-
-_HTTP_MESSAGES = {
-    "403": "Your Nexus API key is invalid. Update it in Settings.",
-    "404": "This mod no longer exists on Nexus.",
-    "410": "This file has been removed from Nexus.",
-}
-
-
-def _nxm_error_message(exc: Exception) -> str:
-    msg = str(exc)
-    for code, text in _HTTP_MESSAGES.items():
-        if f"Nexus API {code}" in msg:
-            return text
-    return f"NXM import failed: {exc}"
-
-
-def _nxm_error_message(exc: Exception) -> str:
-    msg = str(exc)
-    if "403" in msg:
-        return "Nexus API key invalid or missing — get one at nexusmods.com → Account → API Keys"
-    if "404" in msg:
-        return "Mod or file not found on Nexus (may have been removed or made private)"
-    if "410" in msg:
-        return "This file has been permanently removed from Nexus Mods"
-    return f"NXM import failed: {exc}"
 
 
 def do_nxm_import(window, url: str, api_key: str):

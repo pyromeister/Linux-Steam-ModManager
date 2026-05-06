@@ -2,8 +2,6 @@
 
 from pathlib import Path
 
-import pytest
-
 from lsmm.core.config import (
     _parse_library_paths,
     find_library_for_app,
