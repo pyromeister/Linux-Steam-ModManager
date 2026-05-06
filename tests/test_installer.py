@@ -12,7 +12,9 @@ from lsmm.core.installer import (
     detect_and_install,
     detect_source_root,
     check_conflicts,
+    check_conflicts_fomod,
     install_files,
+    install_fomod_files,
     load_manifest,
     record_install,
     remove_from_manifest,
@@ -477,3 +479,115 @@ class TestMigration:
         # Even if legacy exists, new path wins — no overwrite
         load_manifest()
         assert json.loads(new_path.read_text()) == {"ExistingMod": {}}
+
+
+# ── install_fomod_files ───────────────────────────────────────────────────────
+
+class TestInstallFomodFiles:
+    def test_copies_only_listed_files(self, tmp_path):
+        extracted = tmp_path / "extracted"
+        (extracted / "Low").mkdir(parents=True)
+        (extracted / "Low" / "settings.ini").write_text("low")
+        (extracted / "High" / "settings.ini").parent.mkdir(parents=True)
+        (extracted / "High" / "settings.ini").write_text("high")
+        (extracted / "readme.txt").write_text("readme")
+        dest = tmp_path / "Data"
+        dest.mkdir()
+
+        fomod_files = [("Low/settings.ini", "settings.ini")]
+        install_fomod_files(extracted, fomod_files, dest)
+
+        assert (dest / "settings.ini").read_text() == "low"
+        assert not (dest / "High" / "settings.ini").exists()
+        assert not (dest / "readme.txt").exists()
+
+    def test_creates_destination_subdirectory(self, tmp_path):
+        extracted = tmp_path / "extracted"
+        (extracted / "textures").mkdir(parents=True)
+        (extracted / "textures" / "rock.dds").write_bytes(b"dds")
+        dest = tmp_path / "Data"
+        dest.mkdir()
+
+        install_fomod_files(extracted, [("textures/rock.dds", "textures/rock.dds")], dest)
+
+        assert (dest / "textures" / "rock.dds").exists()
+
+    def test_backs_up_overwritten_file(self, tmp_path, monkeypatch):
+        extracted = tmp_path / "extracted"
+        extracted.mkdir()
+        (extracted / "plugin.esp").write_bytes(b"new")
+        dest = tmp_path / "Data"
+        dest.mkdir()
+        (dest / "plugin.esp").write_bytes(b"original")
+        backup_dir = tmp_path / "backups"
+        monkeypatch.setattr(installer, "BACKUPS_DIR", backup_dir)
+
+        installed, backups = install_fomod_files(
+            extracted, [("plugin.esp", "plugin.esp")], dest, game_slug="sg", mod_name="MyMod"
+        )
+
+        assert (dest / "plugin.esp").read_bytes() == b"new"
+        assert backups  # backup entry present
+        bak_path = Path(next(iter(backups.values())))
+        assert bak_path.read_bytes() == b"original"
+
+    def test_returns_installed_paths(self, tmp_path):
+        extracted = tmp_path / "extracted"
+        extracted.mkdir()
+        (extracted / "a.esp").write_bytes(b"esp")
+        dest = tmp_path / "Data"
+        dest.mkdir()
+
+        installed, _ = install_fomod_files(extracted, [("a.esp", "a.esp")], dest)
+
+        assert len(installed) == 1
+        assert installed[0] == dest / "a.esp"
+
+    def test_skips_missing_source_gracefully(self, tmp_path):
+        extracted = tmp_path / "extracted"
+        extracted.mkdir()
+        dest = tmp_path / "Data"
+        dest.mkdir()
+
+        installed, _ = install_fomod_files(
+            extracted, [("nonexistent.esp", "nonexistent.esp")], dest
+        )
+        assert installed == []
+
+
+# ── check_conflicts_fomod ─────────────────────────────────────────────────────
+
+class TestCheckConflictsFomod:
+    def test_detects_conflict_with_tracked_mod(self, tmp_path):
+        dest = tmp_path / "Data"
+        dest.mkdir()
+        existing = dest / "plugin.esp"
+        existing.write_bytes(b"x")
+        manifest = {
+            "OtherMod": {"files": [str(existing.resolve())]}
+        }
+        conflicts = check_conflicts_fomod(
+            [("src/plugin.esp", "plugin.esp")], dest, manifest, "NewMod"
+        )
+        assert len(conflicts) == 1
+        assert conflicts[0][1] == "OtherMod"
+
+    def test_no_conflict_when_no_overlap(self, tmp_path):
+        dest = tmp_path / "Data"
+        dest.mkdir()
+        manifest = {"OtherMod": {"files": [str(dest / "other.esp")]}}
+        conflicts = check_conflicts_fomod(
+            [("src/plugin.esp", "plugin.esp")], dest, manifest, "NewMod"
+        )
+        assert conflicts == []
+
+    def test_skips_own_mod_in_manifest(self, tmp_path):
+        dest = tmp_path / "Data"
+        dest.mkdir()
+        existing = dest / "plugin.esp"
+        existing.write_bytes(b"x")
+        manifest = {"NewMod": {"files": [str(existing.resolve())]}}
+        conflicts = check_conflicts_fomod(
+            [("src/plugin.esp", "plugin.esp")], dest, manifest, "NewMod"
+        )
+        assert conflicts == []

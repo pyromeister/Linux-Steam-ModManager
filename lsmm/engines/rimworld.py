@@ -94,6 +94,7 @@ class RimWorldEngine(BaseEngine):
         mod_name: str | None = None,
         force: bool = False,
         nexus_meta: dict | None = None,
+        fomod_files: list[tuple[str, str]] | None = None,
     ) -> None:
         """
         Extract archive into game_root/Mods/.

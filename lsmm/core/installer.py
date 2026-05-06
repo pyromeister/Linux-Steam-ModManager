@@ -296,6 +296,70 @@ def remove_from_manifest(mod_name: str) -> dict:
     return {}
 
 
+def install_fomod_files(
+    extracted: Path,
+    fomod_files: list[tuple[str, str]],
+    dest_root: Path,
+    game_slug: str | None = None,
+    mod_name: str = "unknown",
+) -> tuple[list[Path], dict[str, str]]:
+    """Copy specific (src, dst) pairs from extracted archive dir to dest_root."""
+    installed: list[Path] = []
+    backups: dict[str, str] = {}
+    backup_base = BACKUPS_DIR / (game_slug or "unknown") / mod_name
+
+    for src_rel, dst_rel in fomod_files:
+        src_file = extracted / src_rel
+        if not src_file.exists() or not src_file.is_file():
+            continue
+        if _should_skip(src_file):
+            continue
+        dst = dest_root / dst_rel
+
+        if dst.exists():
+            bak = backup_base / dst_rel
+            bak.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(dst, bak)
+            backups[str(dst)] = str(bak)
+
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src_file, dst)
+        installed.append(dst)
+
+    return installed, backups
+
+
+def check_conflicts_fomod(
+    fomod_files: list[tuple[str, str]],
+    dest_root: Path,
+    manifest: dict,
+    installing_mod: str,
+) -> list[tuple[str, str]]:
+    """Check conflicts for a specific (src, dst) file list instead of a full extract tree."""
+    file_to_mod: dict[str, str] = {}
+    for mod_name, entry in manifest.items():
+        if mod_name == installing_mod:
+            continue
+        for f in entry.get("files", []):
+            try:
+                key = str(Path(f).resolve(strict=False))
+            except OSError:
+                key = f
+            file_to_mod[key] = mod_name
+
+    conflicts = []
+    for _, dst_rel in fomod_files:
+        dst = dest_root / dst_rel
+        try:
+            key = str(dst.resolve(strict=False))
+        except OSError:
+            key = str(dst)
+        owner = file_to_mod.get(key)
+        if owner:
+            conflicts.append((dst_rel, owner))
+    return conflicts
+
+
 class ConflictError(Exception):
     """Raised when installing a mod would overwrite files owned by another mod."""
     def __init__(self, conflicts: list[tuple[str, str]]):

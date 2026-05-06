@@ -179,6 +179,7 @@ class ModFolderEngine(BaseEngine):
         mod_name: str | None = None,
         force: bool = False,
         nexus_meta: dict | None = None,
+        fomod_files: list[tuple[str, str]] | None = None,
     ) -> None:
         name = mod_name or archive_path.stem
         game_slug = self.profile.get("slug")

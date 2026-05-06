@@ -18,8 +18,10 @@ from lsmm.core.installer import (
     ConflictError,
     cache_archive,
     check_conflicts,
+    check_conflicts_fomod,
     detect_and_install,
     extract,
+    install_fomod_files,
     load_manifest,
     record_install,
     remove_from_manifest,
@@ -53,10 +55,12 @@ class BethesdaEngine(BaseEngine):
         mod_name: str | None = None,
         force: bool = False,
         nexus_meta: dict | None = None,
+        fomod_files: list[tuple[str, str]] | None = None,
     ) -> None:
         """
         Install a mod archive. Raises ConflictError if the mod would overwrite
         files owned by another tracked mod — unless force=True.
+        fomod_files: when provided, only these (src, dst) pairs are installed.
         nexus_meta: optional dict with keys game_domain, mod_id, file_id.
         """
         name = mod_name or archive_path.stem
@@ -65,15 +69,22 @@ class BethesdaEngine(BaseEngine):
             logger.info(f"Extracting {archive_path.name}...")
             extract(archive_path, tmp)
 
-            if not force:
-                conflicts = check_conflicts(tmp, self.paths.data_dir, load_manifest(), name)
-                if conflicts:
-                    raise ConflictError(conflicts)
-
-            archive_cache = cache_archive(archive_path, game_slug)
-
-            logger.info("Installing files...")
-            installed, backups = detect_and_install(tmp, self.paths.data_dir, game_slug, name)
+            if fomod_files is not None:
+                if not force:
+                    conflicts = check_conflicts_fomod(fomod_files, self.paths.data_dir, load_manifest(), name)
+                    if conflicts:
+                        raise ConflictError(conflicts)
+                archive_cache = cache_archive(archive_path, game_slug)
+                logger.info("Installing FOMOD-selected files...")
+                installed, backups = install_fomod_files(tmp, fomod_files, self.paths.data_dir, game_slug, name)
+            else:
+                if not force:
+                    conflicts = check_conflicts(tmp, self.paths.data_dir, load_manifest(), name)
+                    if conflicts:
+                        raise ConflictError(conflicts)
+                archive_cache = cache_archive(archive_path, game_slug)
+                logger.info("Installing files...")
+                installed, backups = detect_and_install(tmp, self.paths.data_dir, game_slug, name)
 
             plugins_added = []
             plugins_file = PluginsFile.read(self.paths.plugins_txt)

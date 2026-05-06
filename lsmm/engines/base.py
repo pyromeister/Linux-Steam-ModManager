@@ -25,6 +25,7 @@ class BaseEngine(ABC):
         mod_name: str | None = None,
         force: bool = False,
         nexus_meta: dict | None = None,
+        fomod_files: list[tuple[str, str]] | None = None,
     ) -> None:
         """Extract archive and install mod files to the correct locations.
         Raises ConflictError if files would overwrite tracked mods (unless force=True).
