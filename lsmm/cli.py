@@ -16,29 +16,29 @@ Usage:
 """
 
 import json
+import logging
 import sys
 import argparse
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-from lsmm.core.config import load_profile, GAMES_DIR
+from lsmm.core.config import load_profile, GAMES_DIR, LOG_PATH
+from lsmm.engines import load_engine
+
+logger = logging.getLogger(__name__)
 
 
-def load_engine(game: str):
+def _setup_logging() -> None:
+    LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    handler = RotatingFileHandler(LOG_PATH, maxBytes=2 * 1024 * 1024, backupCount=3)
+    handler.setFormatter(logging.Formatter("%(asctime)s %(name)s %(levelname)s %(message)s"))
+    logging.basicConfig(level=logging.INFO, handlers=[handler])
+
+
+def _load_engine(game: str):
     profile = load_profile(game)
     profile["slug"] = game
-    engine_name = profile["engine"]
-
-    if engine_name == "bethesda":
-        from lsmm.engines.bethesda import BethesdaEngine
-        return BethesdaEngine(profile)
-    if engine_name == "bepinex":
-        from lsmm.engines.bepinex import BepInExEngine
-        return BepInExEngine(profile)
-    if engine_name == "modfolder":
-        from lsmm.engines.modfolder import ModFolderEngine
-        return ModFolderEngine(profile)
-    print(f"Engine '{engine_name}' not yet implemented.")
-    sys.exit(1)
+    return load_engine(profile)
 
 
 # ── Commands ──────────────────────────────────────────────────────────────────
@@ -193,6 +193,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def main():
+    _setup_logging()
     parser = _build_parser()
     args = parser.parse_args()
 
@@ -200,7 +201,7 @@ def main():
         cmd_games(None, args)
         return
 
-    engine = load_engine(args.game)
+    engine = _load_engine(args.game)
     COMMANDS[args.command](engine, args)
 
 
