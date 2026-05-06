@@ -7,7 +7,7 @@ from pathlib import Path
 import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, GLib, Gtk, Gio
+from gi.repository import Adw, GLib, GObject, Gtk, Gio
 
 from lsmm.core.updater import check_for_update
 from lsmm.core.config import (
@@ -94,6 +94,12 @@ class ModManagerWindow(Adw.ApplicationWindow):
         help_btn.connect("clicked", lambda _: show_help_dialog(self))
         header.pack_start(help_btn)
 
+        self._sidebar_btn = Gtk.ToggleButton()
+        self._sidebar_btn.set_icon_name("sidebar-show-symbolic")
+        self._sidebar_btn.set_tooltip_text("Toggle game list")
+        self._sidebar_btn.set_active(True)
+        header.pack_start(self._sidebar_btn)
+
         self._profiles_popover_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         self._profiles_popover_box.set_margin_start(12)
         self._profiles_popover_box.set_margin_end(12)
@@ -111,13 +117,20 @@ class ModManagerWindow(Adw.ApplicationWindow):
         profiles_menu_btn.set_popover(profiles_popover)
         header.pack_start(profiles_menu_btn)
 
-        self.content_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
-        self.content_box.set_vexpand(True)
-        root.append(self.content_box)
+        self.mods_content_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+        self.mods_content_box.append(self._build_mods_panel())
 
-        self.content_box.append(build_games_panel(self))
-        self.content_box.append(Gtk.Separator(orientation=Gtk.Orientation.VERTICAL))
-        self.content_box.append(self._build_mods_panel())
+        split_view = Adw.OverlaySplitView()
+        split_view.set_vexpand(True)
+        split_view.set_sidebar(build_games_panel(self))
+        split_view.set_content(self.mods_content_box)
+        split_view.set_sidebar_position(Gtk.PackType.START)
+        root.append(split_view)
+
+        self._sidebar_btn.bind_property(
+            "active", split_view, "show-sidebar",
+            GObject.BindingFlags.BIDIRECTIONAL | GObject.BindingFlags.SYNC_CREATE,
+        )
 
         self.load_order_panel = build_load_order_panel(self)
 
@@ -215,10 +228,10 @@ class ModManagerWindow(Adw.ApplicationWindow):
     def _update_load_order_panel(self):
         if self.engine.has_load_order:
             if self.load_order_panel.get_parent() is None:
-                self.content_box.append(self.load_order_panel)
+                self.mods_content_box.append(self.load_order_panel)
         else:
             if self.load_order_panel.get_parent() is not None:
-                self.content_box.remove(self.load_order_panel)
+                self.mods_content_box.remove(self.load_order_panel)
 
     # ── Mods panel ────────────────────────────────────────────────────────────
 
