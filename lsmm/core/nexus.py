@@ -6,6 +6,7 @@ nxm://game_domain/mods/mod_id/files/file_id?key=K&expires=T&user_id=U
 import hashlib
 import json
 import re
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -15,6 +16,17 @@ from lsmm.core import net
 from lsmm.core.version import APP_NAME, APP_VERSION
 
 NXM_PATTERN = re.compile(r"^nxm://([^/]+)/mods/(\d+)/files/(\d+)", re.IGNORECASE)
+
+
+class NxmExpiredError(RuntimeError):
+    """Raised when an NXM link's expiry timestamp is in the past."""
+
+
+def check_nxm_expiry(nxm: dict) -> None:
+    """Raise NxmExpiredError if the NXM link has expired."""
+    expires = nxm.get("expires")
+    if expires and int(expires) < time.time():
+        raise NxmExpiredError("NXM link has expired")
 
 
 def md5_file(path: Path) -> str:
@@ -60,8 +72,10 @@ def get_download_link(nxm: dict, api_key: str) -> str:
     """
     Call Nexus API to get a CDN download URL for the given NXM parameters.
     Returns the download URL string.
+    Raises NxmExpiredError if the link has expired.
     Raises RuntimeError on API failure.
     """
+    check_nxm_expiry(nxm)
     endpoint = (
         f"{NEXUS_API_BASE}/games/{nxm['game_domain']}/mods/{nxm['mod_id']}"
         f"/files/{nxm['file_id']}/download_link.json"

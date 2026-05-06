@@ -95,7 +95,7 @@ class TestApiHeaders:
 class TestGetDownloadLink:
     def test_returns_uri_from_response(self):
         nxm = {"game_domain": "skyrimspecialedition", "mod_id": 1, "file_id": 1,
-               "key": "K", "expires": "9999", "user_id": None}
+               "key": "K", "expires": "9999999999", "user_id": None}
         with patch("lsmm.core.nexus.net.request") as mock_req:
             mock_req.return_value = json.dumps([{"URI": "https://cdn.example.com/file.zip"}])
             uri = get_download_link(nxm, "apikey")
@@ -120,13 +120,13 @@ class TestGetDownloadLink:
 
     def test_includes_key_and_expires_in_url(self):
         nxm = {"game_domain": "skyrimspecialedition", "mod_id": 1, "file_id": 1,
-               "key": "MYKEY", "expires": "12345", "user_id": None}
+               "key": "MYKEY", "expires": "9999999999", "user_id": None}
         with patch("lsmm.core.nexus.net.request") as mock_req:
             mock_req.return_value = json.dumps([{"URI": "https://cdn.example.com/f.zip"}])
             get_download_link(nxm, "apikey")
         call_url = mock_req.call_args[0][0]
         assert "key=MYKEY" in call_url
-        assert "expires=12345" in call_url
+        assert "expires=9999999999" in call_url
 
 
 class TestGetModFiles:
@@ -248,3 +248,47 @@ class TestFetchCollectionGraphql:
             mock_req.return_value = json.dumps(response)
             result = nexus.fetch_collection_graphql("empty-col", "apikey")
         assert result["mods"] == []
+
+
+# ── check_nxm_expiry ──────────────────────────────────────────────────────────
+
+def test_check_nxm_expiry_raises_for_past():
+    nxm = {"expires": "1"}
+    with pytest.raises(nexus.NxmExpiredError):
+        nexus.check_nxm_expiry(nxm)
+
+
+def test_check_nxm_expiry_ok_for_future():
+    import time
+    nxm = {"expires": str(int(time.time()) + 3600)}
+    nexus.check_nxm_expiry(nxm)
+
+
+def test_check_nxm_expiry_ok_when_no_expires():
+    nexus.check_nxm_expiry({"expires": None})
+
+
+# ── _nxm_error_message ────────────────────────────────────────────────────────
+
+def test_nxm_error_message_403():
+    from lsmm.gui.handlers.nxm import _nxm_error_message
+    msg = _nxm_error_message(RuntimeError("Nexus API 403: Forbidden"))
+    assert "API key" in msg
+
+
+def test_nxm_error_message_404():
+    from lsmm.gui.handlers.nxm import _nxm_error_message
+    msg = _nxm_error_message(RuntimeError("Nexus API 404: Not Found"))
+    assert "not found" in msg.lower()
+
+
+def test_nxm_error_message_410():
+    from lsmm.gui.handlers.nxm import _nxm_error_message
+    msg = _nxm_error_message(RuntimeError("Nexus API 410: Gone"))
+    assert "removed" in msg
+
+
+def test_nxm_error_message_unknown():
+    from lsmm.gui.handlers.nxm import _nxm_error_message
+    msg = _nxm_error_message(RuntimeError("some random error"))
+    assert "NXM import failed" in msg

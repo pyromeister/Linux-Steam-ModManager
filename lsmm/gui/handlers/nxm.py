@@ -1,3 +1,4 @@
+import logging
 import threading
 import time
 
@@ -7,6 +8,23 @@ from gi.repository import GLib
 
 from lsmm.core.config import ARCHIVES_DIR
 from lsmm.core.installer import ConflictError
+from lsmm.core.nexus import NxmExpiredError
+
+logger = logging.getLogger(__name__)
+
+_HTTP_MESSAGES = {
+    "403": "Your Nexus API key is invalid. Update it in Settings.",
+    "404": "This mod no longer exists on Nexus.",
+    "410": "This file has been removed from Nexus.",
+}
+
+
+def _nxm_error_message(exc: Exception) -> str:
+    msg = str(exc)
+    for code, text in _HTTP_MESSAGES.items():
+        if f"Nexus API {code}" in msg:
+            return text
+    return f"NXM import failed: {exc}"
 
 
 def _nxm_error_message(exc: Exception) -> str:
@@ -92,9 +110,19 @@ def do_nxm_import(window, url: str, api_key: str):
             GLib.idle_add(window._refresh_mods)
             GLib.idle_add(window._refresh_load_order)
             GLib.idle_add(window._toast, f"Installed: {filename}")
-        except Exception as e:
+
+        except NxmExpiredError:
             GLib.idle_add(window._progress_done)
             GLib.idle_add(window.status_label.set_text, "Ready")
-            GLib.idle_add(window._toast, f"NXM import failed: {e}")
+            GLib.idle_add(
+                window._toast,
+                "This Nexus download link has expired. "
+                "Click 'Mod Manager Download' on Nexus again.",
+            )
+        except Exception as e:
+            logger.error("NXM import error: %s", e)
+            GLib.idle_add(window._progress_done)
+            GLib.idle_add(window.status_label.set_text, "Ready")
+            GLib.idle_add(window._toast, _nxm_error_message(e))
 
     threading.Thread(target=run, daemon=True).start()
