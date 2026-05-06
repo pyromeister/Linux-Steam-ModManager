@@ -1,10 +1,24 @@
 """Load order panel builder and management handlers."""
 
+import threading
+
 import gi
 gi.require_version("Gtk", "4.0")
 from gi.repository import Gtk
 
+from lsmm.core.loot import detect_loot, sort_with_loot
 from lsmm.gui.widgets.plugin_row import PluginRow
+
+_LOOT_INSTALL_HINT = (
+    "LOOT not found — install via package manager or Flatpak (io.github.loot.loot)"
+)
+
+
+def _glib():
+    import gi as _gi
+    _gi.require_version("Gtk", "4.0")
+    from gi.repository import GLib as _GLib
+    return _GLib
 
 
 def build_load_order_panel(win) -> Gtk.Box:
@@ -36,13 +50,26 @@ def build_load_order_panel(win) -> Gtk.Box:
     win.plugins_list.set_margin_end(12)
     scroll.set_child(win.plugins_list)
 
+    btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+    btn_box.set_margin_start(12)
+    btn_box.set_margin_end(12)
+    btn_box.set_margin_top(8)
+    btn_box.set_margin_bottom(12)
+
     save_btn = Gtk.Button(label="Save Order")
-    save_btn.set_margin_start(12)
-    save_btn.set_margin_end(12)
-    save_btn.set_margin_top(8)
-    save_btn.set_margin_bottom(12)
+    save_btn.set_hexpand(True)
     save_btn.connect("clicked", lambda _: save_order(win))
-    inner.append(save_btn)
+    btn_box.append(save_btn)
+
+    loot_cmd = detect_loot()
+    loot_btn = Gtk.Button(label="Sort with LOOT")
+    loot_btn.set_hexpand(True)
+    loot_btn.set_sensitive(bool(loot_cmd))
+    loot_btn.set_tooltip_text("Sort load order with LOOT" if loot_cmd else _LOOT_INSTALL_HINT)
+    loot_btn.connect("clicked", lambda _: do_sort_with_loot(win))
+    btn_box.append(loot_btn)
+
+    inner.append(btn_box)
 
     return panel
 
@@ -65,6 +92,18 @@ def save_order(win):
         child = child.get_next_sibling()
     win.engine.set_load_order(order)
     win._toast("Load order saved")
+
+
+def do_sort_with_loot(win) -> None:
+    """Run LOOT sort in a background thread; refresh load order on success."""
+    def run():
+        try:
+            sort_with_loot(win.engine.profile, win.engine.paths.game_root)
+            _glib().idle_add(win._refresh_load_order)
+        except Exception as e:
+            _glib().idle_add(win._toast, f"LOOT sort failed: {e}")
+
+    threading.Thread(target=run, daemon=True).start()
 
 
 def move_plugin(win, dragged_name: str, target_name: str):
