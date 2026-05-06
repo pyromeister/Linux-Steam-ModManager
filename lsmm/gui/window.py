@@ -233,6 +233,10 @@ class ModManagerWindow(Adw.ApplicationWindow):
         self._update_action_sensitivity()
         self.launch_btn.set_sensitive(bool(self.engine.profile.get("steam_app_id")))
 
+        paths = getattr(self.engine, "paths", None)
+        if paths and hasattr(paths, "proton_prefix") and not paths.proton_prefix.exists():
+            self._toast(f"{name}: launch the game once via Steam to create the Proton prefix")
+
     # ── Steam path setup ──────────────────────────────────────────────────────
 
     def _init_steam_path(self):
