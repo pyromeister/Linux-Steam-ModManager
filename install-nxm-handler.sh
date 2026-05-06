@@ -8,9 +8,10 @@ DESKTOP_FILE="$DESKTOP_DIR/linux-mod-manager.desktop"
 
 mkdir -p "$DESKTOP_DIR"
 
-# Prefer PATH, then ~/.local/bin (for non-login shells), then legacy shim
+# Use absolute path so the desktop file works regardless of how xdg-open is invoked
+# (browsers and launchers may not have ~/.local/bin in PATH)
 if command -v lsmm-gui &>/dev/null; then
-    LSMM_GUI="lsmm-gui"
+    LSMM_GUI="$(command -v lsmm-gui)"
 elif [ -x "$HOME/.local/bin/lsmm-gui" ]; then
     LSMM_GUI="$HOME/.local/bin/lsmm-gui"
 else
