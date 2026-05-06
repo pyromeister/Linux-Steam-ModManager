@@ -1,7 +1,7 @@
 """Tests for LOOT sort button in load order handler (ISC-13..19, no GTK)."""
 
 import threading
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 from lsmm.gui.handlers.load_order import do_sort_with_loot
 
@@ -35,7 +35,8 @@ def test_sort_runs_in_background_thread():
         mock_glib.return_value.idle_add = lambda fn, *a: fn(*a)
         do_sort_with_loot(win)
 
-    import time; time.sleep(0.05)
+    import time
+    time.sleep(0.05)
     assert sort_thread and sort_thread[0] is not main_thread
 
 

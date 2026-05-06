@@ -1,7 +1,6 @@
 """Tests for lsmm.core.loot — LOOT detection and sort invocation."""
 
 import subprocess
-from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 from lsmm.core.loot import detect_loot, loot_game_id, sort_with_loot
