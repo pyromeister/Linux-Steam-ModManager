@@ -59,8 +59,7 @@ fill that gap with a proper native tool.
 
 - Python 3.10+
 - GTK 4 + libadwaita (for the GUI): `sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1`
-- `p7zip-full` — for `.7z` archives: `sudo apt install p7zip-full`
-- `unrar` — for `.rar` archives: `sudo apt install unrar`
+- `p7zip-full` — for `.7z` and `.rar` archives: `sudo apt install p7zip-full`
 - `.zip` archives are handled by Python's standard library (no extra tool needed)
 - Steam with Proton (for Bethesda games)
 
