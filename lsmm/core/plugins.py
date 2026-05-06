@@ -41,6 +41,7 @@ class PluginsFile:
         return cls(path=path, _lines=lines)
 
     def write(self) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.write_text(
             "\n".join(str(line) for line in self._lines) + "\n",
             encoding="utf-8",
