@@ -40,12 +40,6 @@ class ModManagerApp(Adw.Application):
         self.connect("command-line", self._on_command_line)
 
     def _on_activate(self, app):
-        try:
-            settings = Gtk.Settings.get_default()
-            if settings is not None:
-                settings.reset_property("gtk-application-prefer-dark-theme")
-        except Exception:
-            pass
         Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.PREFER_DARK)
         assets_dir = ROOT / "assets"
         if assets_dir.exists():
