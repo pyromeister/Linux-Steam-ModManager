@@ -331,31 +331,19 @@ class ModManagerWindow(Adw.ApplicationWindow):
         self.uninstall_btn.set_sensitive(False)
         btn_box.append(self.uninstall_btn)
 
-        more_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
-        more_box.set_margin_start(8)
-        more_box.set_margin_end(8)
-        more_box.set_margin_top(8)
-        more_box.set_margin_bottom(8)
+        self.nxm_btn = Gtk.Button(label="Import from Nexus…")
+        self.nxm_btn.set_tooltip_text("Import mod via Nexus nxm:// link")
+        self.nxm_btn.connect("clicked", self._on_nxm_import)
+        self.nxm_btn.set_hexpand(True)
+        self.nxm_btn.set_sensitive(False)
+        btn_box.append(self.nxm_btn)
 
-        nxm_btn = Gtk.Button(label="Import from Nexus…")
-        nxm_btn.set_tooltip_text("Import mod via Nexus nxm:// link")
-        nxm_btn.connect("clicked", self._on_nxm_import)
-        more_box.append(nxm_btn)
-
-        update_btn = Gtk.Button(label="Check Updates")
-        update_btn.set_tooltip_text("Check Nexus Mods for updates to installed mods")
-        update_btn.connect("clicked", self._on_check_updates)
-        more_box.append(update_btn)
-
-        more_popover = Gtk.Popover()
-        more_popover.set_child(more_box)
-
-        self.more_btn = Gtk.MenuButton()
-        self.more_btn.set_icon_name("view-more-symbolic")
-        self.more_btn.set_tooltip_text("More actions")
-        self.more_btn.set_popover(more_popover)
-        self.more_btn.set_sensitive(False)
-        btn_box.append(self.more_btn)
+        self.update_btn = Gtk.Button(label="Check Updates")
+        self.update_btn.set_tooltip_text("Check Nexus Mods for updates to installed mods")
+        self.update_btn.connect("clicked", self._on_check_updates)
+        self.update_btn.set_hexpand(True)
+        self.update_btn.set_sensitive(False)
+        btn_box.append(self.update_btn)
 
         panel.append(btn_box)
         return panel
@@ -444,7 +432,8 @@ class ModManagerWindow(Adw.ApplicationWindow):
         has_engine = self.engine is not None
         self.install_btn.set_sensitive(has_engine)
         self.uninstall_btn.set_sensitive(has_engine)
-        self.more_btn.set_sensitive(has_engine)
+        self.nxm_btn.set_sensitive(has_engine)
+        self.update_btn.set_sensitive(has_engine)
 
     def _on_install(self, _btn):
         if not self.engine:
