@@ -1,11 +1,11 @@
 """Tests for lsmm.core.fomod — FOMOD XML parser."""
 
-import io
+import os
+import tempfile
 import zipfile
+from pathlib import Path
 
-import pytest
-
-from lsmm.core.fomod import detect_fomod, FomodConfig, FomodStep, FomodGroup, FomodPlugin
+from lsmm.core.fomod import detect_fomod, FomodConfig
 
 
 # ── XML fixtures ──────────────────────────────────────────────────────────────
@@ -107,10 +107,8 @@ _MALFORMED_XML = "this is not xml at all <<<"
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
-def _make_zip(members: dict[str, str | bytes], suffix=".zip") -> "Path":
+def _make_zip(members: dict[str, str | bytes], suffix=".zip") -> Path:
     """Create a real temp zip file on disk and return its path."""
-    import tempfile, os
-    from pathlib import Path
     fd, path = tempfile.mkstemp(suffix=suffix)
     os.close(fd)
     with zipfile.ZipFile(path, "w") as z:
