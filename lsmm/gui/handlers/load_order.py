@@ -2,12 +2,7 @@
 
 import threading
 
-import gi
-gi.require_version("Gtk", "4.0")
-from gi.repository import Gtk
-
 from lsmm.core.loot import detect_loot, sort_with_loot
-from lsmm.gui.widgets.plugin_row import PluginRow
 
 _LOOT_INSTALL_HINT = (
     "LOOT not found — install via package manager or Flatpak (io.github.loot.loot)"
@@ -21,8 +16,11 @@ def _glib():
     return _GLib
 
 
-def build_load_order_panel(win) -> Gtk.Box:
+def build_load_order_panel(win):
     """Build the load order column panel, setting win.plugins_list."""
+    import gi as _gi
+    _gi.require_version("Gtk", "4.0")
+    from gi.repository import Gtk
     panel = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
 
     inner = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
@@ -73,6 +71,7 @@ def build_load_order_panel(win) -> Gtk.Box:
 def refresh_load_order(win):
     if not win.engine or not win.engine.has_load_order:
         return
+    from lsmm.gui.widgets.plugin_row import PluginRow
     while child := win.plugins_list.get_first_child():
         win.plugins_list.remove(child)
     for i, name in enumerate(win.engine.get_load_order()):
@@ -80,6 +79,7 @@ def refresh_load_order(win):
 
 
 def save_order(win):
+    from lsmm.gui.widgets.plugin_row import PluginRow
     order = []
     child = win.plugins_list.get_first_child()
     while child:
@@ -103,6 +103,7 @@ def do_sort_with_loot(win) -> None:
 
 
 def move_plugin(win, dragged_name: str, target_name: str):
+    from lsmm.gui.widgets.plugin_row import PluginRow
     order = []
     child = win.plugins_list.get_first_child()
     while child:
