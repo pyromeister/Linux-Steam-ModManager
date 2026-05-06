@@ -167,7 +167,7 @@ class GamePaths:
     @property
     def plugins_txt(self) -> Path:
         """Plugins.txt — in Proton AppData (Bethesda games)."""
-        name = self.profile["name"]
+        name = self.profile.get("appdata_name") or self.profile["name"]
         return (
             self.drive_c
             / "users/steamuser/AppData/Local"

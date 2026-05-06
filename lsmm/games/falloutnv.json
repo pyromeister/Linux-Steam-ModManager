@@ -1,0 +1,14 @@
+{
+  "name": "Fallout: New Vegas",
+  "appdata_name": "FalloutNV",
+  "steam_app_id": "22380",
+  "engine": "bethesda",
+  "game_exe": "FalloutNV.exe",
+  "install_subdir": "Fallout New Vegas",
+  "nexus_domain": "newvegas",
+  "script_extender": {
+    "name": "NVSE",
+    "loader_exe": "nvse_loader.exe",
+    "plugins_dir": "Data/NVSE/Plugins"
+  }
+}
