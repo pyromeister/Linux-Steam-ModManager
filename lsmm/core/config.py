@@ -4,6 +4,7 @@ No hardcoded game paths. All paths derived from Steam layout + profile.
 """
 
 import json
+import os
 import re
 import sys
 from importlib.resources import files as _pkg_files
@@ -39,6 +40,7 @@ def _load_app_config() -> dict:
 def _save_app_config(data: dict) -> None:
     APP_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
     APP_CONFIG_PATH.write_text(json.dumps(data, indent=2))
+    os.chmod(APP_CONFIG_PATH, 0o600)
 
 
 def save_steam_root(path: Path) -> None:
@@ -94,7 +96,7 @@ def _parse_library_paths(vdf_path: Path) -> list[Path]:
     if not vdf_path.exists():
         return []
     content = vdf_path.read_text(encoding="utf-8", errors="replace")
-    return [Path(p) for p in re.findall(r'"path"\s+"([^"]+)"', content)]
+    return [Path(p) for p in re.findall(r'"path"\s+"([^"]+)"', content) if Path(p).is_absolute()]
 
 
 def get_all_library_paths(steam_root: Path | None = None) -> list[Path]:
