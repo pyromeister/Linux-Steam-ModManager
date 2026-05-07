@@ -104,6 +104,24 @@ def test_sort_with_loot_propagates_nonzero_exit(tmp_path):
             pass
 
 
+# ── Flatpak sandbox detection ─────────────────────────────────────────────────
+
+def test_detect_loot_inside_flatpak_uses_flatpak_spawn():
+    with patch("lsmm.core.loot._in_flatpak", return_value=True), \
+         patch("lsmm.core.loot.subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(returncode=0)
+        result = detect_loot()
+    assert result == ["flatpak-spawn", "--host", "flatpak", "run", "io.github.loot.loot"]
+
+
+def test_detect_loot_inside_flatpak_returns_none_when_not_installed():
+    with patch("lsmm.core.loot._in_flatpak", return_value=True), \
+         patch("lsmm.core.loot.subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(returncode=1)
+        result = detect_loot()
+    assert result is None
+
+
 def test_sort_with_loot_flatpak_command_prefix(tmp_path):
     flatpak_cmd = ["flatpak", "run", "io.github.loot.loot"]
     with patch("lsmm.core.loot.detect_loot", return_value=flatpak_cmd), \

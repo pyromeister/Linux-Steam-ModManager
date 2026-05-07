@@ -1,11 +1,15 @@
 """Tests for lsmm.core.config — Steam library detection and VDF parsing."""
 
+import time
 from pathlib import Path
 
 from lsmm.core.config import (
     _parse_library_paths,
     find_library_for_app,
     get_all_library_paths,
+    get_update_snooze,
+    is_update_snoozed,
+    set_update_snooze,
 )
 
 
@@ -140,3 +144,48 @@ def test_find_library_for_app_fallback_to_root(tmp_path, monkeypatch):
 def test_find_library_for_app_no_steam_root(monkeypatch):
     monkeypatch.setattr("lsmm.core.config.get_steam_root", lambda: None)
     assert find_library_for_app(12345) is None
+
+
+# ── update snooze ─────────────────────────────────────────────────────────────
+
+def test_set_and_get_update_snooze_stores_version(tmp_path, monkeypatch):
+    monkeypatch.setattr("lsmm.core.config.APP_CONFIG_PATH", tmp_path / "config.json")
+    set_update_snooze(7, "v1.2.3")
+    snooze = get_update_snooze()
+    assert snooze is not None
+    assert snooze["version"] == "v1.2.3"
+
+
+def test_is_update_snoozed_true_within_window(tmp_path, monkeypatch):
+    monkeypatch.setattr("lsmm.core.config.APP_CONFIG_PATH", tmp_path / "config.json")
+    set_update_snooze(7, "v1.2.3")
+    assert is_update_snoozed("v1.2.3") is True
+
+
+def test_is_update_snoozed_false_when_expired(tmp_path, monkeypatch):
+    monkeypatch.setattr("lsmm.core.config.APP_CONFIG_PATH", tmp_path / "config.json")
+    # Write a snooze that expired 1 second ago
+    import json
+    import lsmm.core.config as cfg
+    cfg.APP_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    cfg.APP_CONFIG_PATH.write_text(json.dumps(
+        {"update_snooze": {"until": time.time() - 1, "version": "v1.2.3"}}
+    ))
+    assert is_update_snoozed("v1.2.3") is False
+
+
+def test_is_update_snoozed_true_for_permanent(tmp_path, monkeypatch):
+    monkeypatch.setattr("lsmm.core.config.APP_CONFIG_PATH", tmp_path / "config.json")
+    set_update_snooze(None, "v1.2.3")
+    assert is_update_snoozed("v1.2.3") is True
+
+
+def test_is_update_snoozed_false_for_different_version(tmp_path, monkeypatch):
+    monkeypatch.setattr("lsmm.core.config.APP_CONFIG_PATH", tmp_path / "config.json")
+    set_update_snooze(7, "v1.2.3")
+    assert is_update_snoozed("v1.9.9") is False
+
+
+def test_is_update_snoozed_false_when_no_snooze_set(tmp_path, monkeypatch):
+    monkeypatch.setattr("lsmm.core.config.APP_CONFIG_PATH", tmp_path / "config.json")
+    assert is_update_snoozed("v1.2.3") is False
