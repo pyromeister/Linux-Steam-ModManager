@@ -42,7 +42,7 @@ def _setup_logging() -> None:
 class ModManagerApp(Adw.Application):
     def __init__(self):
         super().__init__(
-            application_id="io.github.linuxmodmanager",
+            application_id="io.github.pyromeister.lsmm",
             flags=Gio.ApplicationFlags.HANDLES_COMMAND_LINE,
         )
         self._window: ModManagerWindow | None = None

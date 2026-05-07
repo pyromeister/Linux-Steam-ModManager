@@ -17,6 +17,8 @@ finish-args:
   - --filesystem=/run/media
   # Allows invoking LOOT via "flatpak run io.github.loot.loot" from inside sandbox
   - --talk-name=org.freedesktop.Flatpak
+  # Required for GApplication D-Bus registration (single-instance, D-Bus activation)
+  - --own-name=io.github.pyromeister.lsmm
 
 modules:
   - name: p7zip

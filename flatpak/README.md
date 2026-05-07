@@ -24,9 +24,11 @@ flatpak-builder --user --install --force-clean build-flatpak \
 flatpak run io.github.pyromeister.lsmm
 ```
 
-## Register NXM handler
+## NXM handler
 
-After installing the Flatpak, register the nxm:// handler:
+The `nxm://` protocol handler is registered automatically when the Flatpak is installed — no manual step needed. The `.desktop` file declares `MimeType=x-scheme-handler/nxm` and `update-desktop-database` runs as part of the install.
+
+If you have another app (e.g. Vortex via Proton) that also claims `nxm://` and want LSMM to take priority, run:
 
 ```bash
 xdg-mime default io.github.pyromeister.lsmm.desktop x-scheme-handler/nxm

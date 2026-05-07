@@ -286,13 +286,25 @@ class ModFolderEngine(BaseEngine):
                     continue
                 is_disabled = d.name.endswith(".disabled")
                 base_name = d.name.removesuffix(".disabled")
-                if base_name not in tracked_names and base_name not in tracked_dirs:
-                    result.append({
-                        "name": base_name,
-                        "active": not is_disabled,
-                        "kind": "mod",
-                        "untracked": True,
-                    })
+                if base_name in tracked_names or base_name in tracked_dirs:
+                    continue
+                # Skip SMAPI-bundled internal mods (UniqueID starts with "SMAPI.")
+                manifest_path = d / "manifest.json"
+                if manifest_path.exists():
+                    try:
+                        import json as _json
+                        raw = re.sub(r"//[^\n]*", "", manifest_path.read_text(encoding="utf-8"))
+                        uid = _json.loads(raw).get("UniqueID", "")
+                        if uid.startswith("SMAPI."):
+                            continue
+                    except Exception:
+                        pass
+                result.append({
+                    "name": base_name,
+                    "active": not is_disabled,
+                    "kind": "mod",
+                    "untracked": True,
+                })
 
         return result
 

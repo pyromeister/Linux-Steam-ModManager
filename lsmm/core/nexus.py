@@ -177,26 +177,34 @@ def fetch_collection_graphql(slug: str, api_key: str) -> dict | None:
         "variables": {"slug": slug},
     }
     try:
-        response = json.loads(net.request(url, data=json.dumps(query).encode(), headers=headers))
-    except Exception:
+        raw = net.request(url, data=json.dumps(query).encode(), headers=headers)
+        response = json.loads(raw)
+    except Exception as e:
+        logging.warning("fetch_collection_graphql network error: %s", e)
+        return None
+
+    if response.get("errors"):
+        logging.warning("fetch_collection_graphql API errors: %s", response["errors"])
         return None
 
     try:
-        rev = response["data"]["collection"]["latestPublishedRevision"]
-        game_domain = response["data"]["collection"]["game"]["domainName"]
-        col_name = response["data"]["collection"]["name"]
+        col = response["data"]["collection"]
+        rev = col["latestPublishedRevision"]
+        game_domain = col["game"]["domainName"]
+        col_name = col["name"]
         mods = []
         for mf in rev.get("modFiles", []):
-            f = mf.get("file", {})
+            f = mf.get("file") or {}
             mods.append({
                 "mod_id": f.get("modId"),
                 "file_id": mf.get("fileId"),
                 "game_domain": game_domain,
-                "mod_name": f.get("mod", {}).get("name", ""),
+                "name": (f.get("mod") or {}).get("name") or "",
                 "optional": mf.get("optional", False),
             })
         return {"name": col_name, "game_domain": game_domain, "mods": mods}
-    except (KeyError, TypeError):
+    except (KeyError, TypeError) as e:
+        logging.warning("fetch_collection_graphql parse error: %s | response: %s", e, response)
         return None
 
 

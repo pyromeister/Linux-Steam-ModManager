@@ -183,13 +183,26 @@ def on_import_collection(window, url: str):
         collection_name = collection_slug
         collection_mods = None
         game_domain = None
-        if api_key:
+        fetch_failed = False
+
+        if not api_key:
+            fetch_failed = True
+        else:
             from lsmm.core.nexus import fetch_collection_graphql
             info = fetch_collection_graphql(collection_slug, api_key)
             if info:
                 collection_name = info.get("name") or collection_slug
                 collection_mods = info.get("mods")
                 game_domain = info.get("game_domain")
+            else:
+                fetch_failed = True
+
+        if fetch_failed and not collection_mods:
+            GLib.idle_add(
+                window._toast,
+                "Could not fetch collection mod list — check your Nexus API key and try again",
+            )
+            return
 
         prof.save(slug, collection_name, [], [],
                   collection_mods=collection_mods,
