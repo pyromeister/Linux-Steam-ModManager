@@ -9,6 +9,7 @@ from pathlib import Path
 def _in_flatpak() -> bool:
     return os.environ.get("FLATPAK_ID") is not None or Path("/.flatpak-info").exists()
 
+
 _LOOT_FLATPAK_ID = "io.github.loot.loot"
 
 _LOOT_GAME_IDS: dict[str, str] = {
