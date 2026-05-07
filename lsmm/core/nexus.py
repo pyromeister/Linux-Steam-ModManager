@@ -5,6 +5,7 @@ nxm://game_domain/mods/mod_id/files/file_id?key=K&expires=T&user_id=U
 
 import hashlib
 import json
+import logging
 import re
 import time
 import urllib.error
