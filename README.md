@@ -1,111 +1,90 @@
 # Linux Steam ModManager (LSMM)
 
 <p align="center">
-  <img src="assets/icon.png" width="128" alt="LSMM Logo"/>
+  <img src="assets/icon.png" width="96" alt="LSMM Logo"/>
 </p>
 
-A native Linux mod manager for Steam games with engine-plugin architecture.
-Supports Bethesda games (Starfield, Skyrim SE, Fallout 4), BepInEx games (Planet Crafter, Craftopia),
-and ModFolder games (Stardew Valley with SMAPI auto-install, RimWorld, 7 Days to Die) out of the box.
+<p align="center">
+  Native Linux mod manager for Steam games — built for the Steam Deck.
+</p>
 
-> ⚠️ **Early Alpha.** Core features work (Starfield tested). Expect rough edges. Not recommended for large mod setups yet.
+<p align="center">
+  <a href="#installation">Install</a> · <a href="#supported-games">Supported Games</a> · <a href="https://github.com/pyromeister/Linux-Steam-ModManager/wiki">Wiki</a> · <a href="https://github.com/pyromeister/Linux-Steam-ModManager/issues">Issues</a>
+</p>
 
-> **Note:** This project was built with [Claude Code](https://claude.ai/code) by Anthropic.
-> The code was generated through an AI-assisted development session and is maintained by the repository owner.
+> ⚠️ **Early Alpha.** Core features work (Starfield tested). Not recommended for large mod setups yet.
 
 ---
 
-## Why?
+## What it does
 
-Mod managers on Linux are an afterthought. Mod Organizer 2 and Vortex run via Wine/Proton
-but aren't native tools. Linux gaming is growing — the Steam Hardware Survey shows a steady
-increase, and the Steam Deck has brought thousands of new Linux users. This project aims to
-fill that gap with a proper native tool.
+LSMM is a native GTK4 mod manager that handles the full mod lifecycle — download, install, enable/disable, uninstall — without Wine or Proton wrappers for the tool itself.
+
+**Who it's for:** Steam Deck users and Linux gamers who want a real native mod manager instead of running Vortex or MO2 through Wine.
 
 ---
 
 ## Features
 
-- Install mods from `.zip`, `.7z`, and `.rar` archives
-- **NXM URL import** *(experimental)* — paste an `nxm://` link from Nexus Mods for direct download + install (requires free Nexus API key)
-- **Update check** — "Check Updates" button queries Nexus Mods API for newer versions of installed mods (NXM-imported only; requires API key)
-- **Update All** — after checking for updates, a results dialog lets you update all mods at once or open browser tabs for manual downloads
-- **Mod metadata in list** — version and file size displayed below each mod name in the mod list
-- **Better NXM error messages** — expiry detection, and specific messages for 403/404/410 responses
-- **In-app LSMM update check** — an info banner appears automatically when a new LSMM release is published on GitHub
-- **Progress bar** — install and download operations show a progress bar; NXM downloads display real percentage, file installs use pulse mode
-- **Games panel** — dedicated left column lists all game profiles; click to switch game, import external profiles via "Add", remove profiles via "Remove"
-- **Custom game profiles** — add your own game JSON profiles to `~/.config/linux-mod-manager/games/` without touching the installation; see [Game Profile Schema](https://github.com/pyromeister/Linux-Steam-ModManager/wiki/Game-Profile-Schema)
-- **Mod profiles** — save and restore named loadouts (active mods + load order) per game; "Save" button updates the selected profile in-place
-- **Launch game** — launch the selected game directly from the GUI
-- **Mod list search & sort** — alphabetic sort with live search filter
-- **Nexus collection import** — import a Nexus collection mod list; Missing/Installed sections show what's needed at a glance
-- **SMAPI auto-install** — installs the latest SMAPI release for Stardew Valley automatically via GitHub releases
-- Automatically detects mod structure and copies files to the correct location
-- Handles standard `Data/`, double-nested `Data/Data/`, single-wrapper `ModName/Data/`, and bare-root layouts
-- Manages `Plugins.txt` load order for Bethesda games
-- Enable / disable individual mods
-- Reorder load order via drag & drop in the GUI
-- **Archive cache:** each mod archive is copied to `~/.local/share/linux-mod-manager/archives/{game}/` on install — the original can be moved or deleted without affecting the tracked state
-- **Backup before overwrite:** if a mod install would overwrite an existing file (vanilla or from another mod), the original is backed up to `~/.local/share/linux-mod-manager/backups/{game}/{mod}/` and restored automatically on uninstall
-- Tracks installed files for clean uninstall (no leftover files)
-- **Linux case-sensitivity fix:** normalizes directory names (`interface/` → `Interface/`, `sfse/plugins/` → `SFSE/Plugins/`) that Windows-packed mods get wrong
-- Script extender launch setup (SFSE, SKSE, F4SE) via Proton wrapper
-- Multi-game support via JSON game profiles
+**Installation**
+- Install from `.zip`, `.7z`, `.rar` archives — auto-detects mod structure
+- **NXM links** — click "Mod Manager Download" on Nexus Mods, LSMM handles the rest
+- FOMOD installer support for complex multi-choice mods
+- Conflict detection before install; backup + restore on uninstall
 
----
+**Mod management**
+- Enable / disable mods without uninstalling
+- Drag & drop load order reordering
+- Search and alphabetic sort in the mod list
+- Mod profiles — save and restore named loadouts per game
 
-## Requirements
+**Nexus Mods integration**
+- Requires a free [Nexus API key](https://www.nexusmods.com/users/myaccount?tab=api)
+- Import collections, check for updates, update all at once
+- Version and file size shown in the mod list
 
-- Python 3.10+
-- GTK 4 + libadwaita (for the GUI): `sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1`
-- `p7zip-full` — for `.7z` and `.rar` archives: `sudo apt install p7zip-full`
-- `.zip` archives are handled by Python's standard library (no extra tool needed)
-- Steam with Proton (for Bethesda games)
+**Under the hood**
+- Multi-library support including SD card (`/run/media`)
+- Linux case-sensitivity fix for Windows-packed archives
+- Script extender detection (SFSE, SKSE, F4SE)
+- LOOT load order sorting for Bethesda games
 
 ---
 
 ## Installation
 
+**Option A — Flatpak** *(coming to Flathub)*
+
 ```bash
-git clone https://github.com/pyromeister/Linux-Steam-ModManager
-cd Linux-Steam-ModManager
+# Build from source (see flatpak/README.md)
+flatpak-builder --user --install --force-clean build-flatpak \
+    flatpak/io.github.pyromeister.lsmm.yml
+```
+
+**Option B — pip**
+
+```bash
 pip install .
 ```
 
-This installs the `lsmm` and `lsmm-gui` entry points.
-GTK4 and libadwaita must be installed as system packages (see Requirements above) — they are not pip-installable.
-
-For development (includes pytest, flake8):
+Requirements: Python 3.10+, GTK4 + libadwaita, p7zip
 
 ```bash
-pip install ".[dev]"
+sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 p7zip-full
 ```
 
 ---
 
-## Usage — GUI
+## Usage
 
 ```bash
-lsmm-gui
-# or without installing:
-python3 modlauncher-gui.py
+lsmm-gui          # open the GUI
 ```
 
-Select your game from the games panel on the left. The load order panel appears automatically
-for games that support it (Bethesda games). Use **+ Install** to open a file
-chooser — you can select multiple archives at once and they will be installed
-sequentially.
-
----
-
-## Usage — CLI
-
 ```bash
-lsmm --game starfield list
 lsmm --game starfield install ~/Downloads/SomeMod.zip
+lsmm --game starfield list
 lsmm --game starfield uninstall MyModName
-lsmm games
 ```
 
 Full command reference: [CLI Reference](https://github.com/pyromeister/Linux-Steam-ModManager/wiki/CLI-Reference)
@@ -116,32 +95,35 @@ Full command reference: [CLI Reference](https://github.com/pyromeister/Linux-Ste
 
 | Engine | Games |
 |--------|-------|
-| Bethesda | Starfield, Skyrim SE, Fallout 4 (SFSE / SKSE / F4SE via Proton) |
-| BepInEx | Planet Crafter (Proton), Craftopia (Proton) |
+| Bethesda | Starfield, Skyrim SE, Fallout 4, Oblivion, Fallout NV, Fallout 3 |
+| BepInEx | Planet Crafter, Craftopia |
 | ModFolder / SMAPI | Stardew Valley (SMAPI auto-install), RimWorld, 7 Days to Die |
 
-Full list with engine and script extender details: [Supported Games](https://github.com/pyromeister/Linux-Steam-ModManager/wiki/Supported-Games)
+[Full list with details →](https://github.com/pyromeister/Linux-Steam-ModManager/wiki/Supported-Games)
 
 Want a game added? [Open a Game Request](https://github.com/pyromeister/Linux-Steam-ModManager/issues/new?template=game_request.yml)
 
-### Custom Game Profiles
+---
 
-You can add support for any game without modifying the installation. Drop a JSON file into
-`~/.config/linux-mod-manager/games/` and LSMM will pick it up on next launch.
+## Custom Game Profiles
 
-Schema reference and examples: [Game Profile Schema](https://github.com/pyromeister/Linux-Steam-ModManager/wiki/Game-Profile-Schema)
+Add any game without modifying the installation — drop a JSON file into `~/.config/linux-mod-manager/games/`.
+
+[Game Profile Schema →](https://github.com/pyromeister/Linux-Steam-ModManager/wiki/Game-Profile-Schema)
 
 ---
 
 ## Contributing
 
-Contributions welcome — especially engine plugins for new games.
+Contributions welcome, especially engine plugins for new games.
 Open an issue before starting large changes.
 
-Wiki for contributors: [Project Structure](https://github.com/pyromeister/Linux-Steam-ModManager/wiki/Project-Structure) · [Adding a New Game](https://github.com/pyromeister/Linux-Steam-ModManager/wiki/Adding-a-New-Game) · [Bethesda Engine Internals](https://github.com/pyromeister/Linux-Steam-ModManager/wiki/Bethesda-Engine-Internals)
+[Project Structure](https://github.com/pyromeister/Linux-Steam-ModManager/wiki/Project-Structure) · [Adding a New Game](https://github.com/pyromeister/Linux-Steam-ModManager/wiki/Adding-a-New-Game) · [Bethesda Engine Internals](https://github.com/pyromeister/Linux-Steam-ModManager/wiki/Bethesda-Engine-Internals)
 
 ---
 
 ## License
 
-GPLv3 — free to use, modify, and distribute; any derivative work must remain open source under the same license. See [LICENSE](LICENSE) for details.
+GPLv3 — see [LICENSE](LICENSE).
+
+> Built with [Claude Code](https://claude.ai/code).

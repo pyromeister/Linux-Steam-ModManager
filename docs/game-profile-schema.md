@@ -2,46 +2,39 @@
 
 Game profiles are JSON files that tell LSMM how to manage mods for a specific game.
 
-## Location
-
-| Priority | Path |
-|----------|------|
-| 1 (user, takes precedence) | `~/.config/linux-mod-manager/games/<slug>.json` |
-| 2 (bundled) | installed alongside the package in `lsmm/games/` |
-
-Drop a file in the user directory to add a new game or override a bundled profile.
-The `<slug>` becomes the internal identifier (e.g. `oblivion`, `skyrim_se`).
+Drop a file into `~/.config/linux-mod-manager/games/<slug>.json` to add a game or override a bundled profile without touching the installation.
 
 ## Required fields
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `name` | string | Display name shown in the UI |
-| `steam_app_id` | string | Steam application ID (find at store.steampowered.com) |
+| `steam_app_id` | string | Steam application ID |
 | `engine` | string | Engine plugin — see [Engines](#engines) |
-| `game_exe` | string | Game executable filename (e.g. `Starfield.exe`) |
-| `install_subdir` | string | Subfolder name inside the Steam library (e.g. `Starfield`) |
+| `game_exe` | string | Game executable (e.g. `Starfield.exe`) |
+| `install_subdir` | string | Folder name inside the Steam library (e.g. `Starfield`) |
 
 ## Optional fields
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `nexus_domain` | string | Nexus Mods game domain (e.g. `starfield`) — enables NXM links |
-| `mod_dir` | string | Subdirectory inside the game folder where mods are installed (default: `Data`) |
+| `mod_dir` | string | Subdirectory inside the game folder where mods land (default: `Data`) |
+| `appdata_name` | string | Override AppData folder name for Plugins.txt (Bethesda only) |
 | `script_extender` | object | See [Script extender](#script-extender) |
 
 ## Engines
 
-| Value | Games |
-|-------|-------|
-| `bethesda` | Starfield, Skyrim SE, Fallout 4 — manages `Plugins.txt` |
+| Value | Use for |
+|-------|---------|
+| `bethesda` | Starfield, Skyrim SE, Fallout 4 — manages Plugins.txt |
 | `modfolder` | Stardew Valley (SMAPI), 7 Days to Die — copies files into mod folder |
 | `bepinex` | Planet Crafter, Craftopia — Unity + BepInEx |
-| `rimworld` | RimWorld — reads/writes `ModsConfig.xml` |
+| `rimworld` | RimWorld — reads/writes ModsConfig.xml |
 
 ## Script extender
 
-Only relevant for `bethesda` engine games that have a script extender.
+Only needed for `bethesda` games that have a script extender (SFSE, SKSE, F4SE).
 
 ```json
 "script_extender": {
@@ -51,7 +44,7 @@ Only relevant for `bethesda` engine games that have a script extender.
 }
 ```
 
-## Full example
+## Example
 
 ```json
 {
@@ -64,3 +57,5 @@ Only relevant for `bethesda` engine games that have a script extender.
   "mod_dir": "OblivionRemastered/Content/Dev/ObvData/Data"
 }
 ```
+
+The `<slug>` (filename without `.json`) becomes the internal identifier used with `--game` on the CLI.
