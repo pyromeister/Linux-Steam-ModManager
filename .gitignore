@@ -40,6 +40,10 @@ dev-tools/
 Makefile
 .pytest_cache/
 
+# Flatpak build output (source files in flatpak/ stay in repo)
+build-flatpak/
+.flatpak-builder/
+
 # Test coverage
 .coverage
 .coverage.*
