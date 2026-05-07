@@ -186,7 +186,11 @@ def on_import_collection(window, url: str):
         fetch_failed = False
 
         if not api_key:
-            fetch_failed = True
+            GLib.idle_add(
+                window._toast,
+                "Nexus API key not set — open Settings to add one",
+            )
+            return
         else:
             from lsmm.core.nexus import fetch_collection_graphql
             info = fetch_collection_graphql(collection_slug, api_key)

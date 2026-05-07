@@ -7,6 +7,7 @@ import json
 import os
 import re
 import sys
+import time
 from importlib.resources import files as _pkg_files
 from pathlib import Path
 
@@ -48,6 +49,26 @@ def save_steam_root(path: Path) -> None:
     config = _load_app_config()
     config["steam_root"] = str(path)
     _save_app_config(config)
+
+
+def get_update_snooze() -> dict | None:
+    return _load_app_config().get("update_snooze")
+
+
+def set_update_snooze(days: int | None, version: str) -> None:
+    """Snooze update notification. days=None means permanent for this version."""
+    config = _load_app_config()
+    until = None if days is None else time.time() + days * 86400
+    config["update_snooze"] = {"until": until, "version": version}
+    _save_app_config(config)
+
+
+def is_update_snoozed(version: str) -> bool:
+    snooze = _load_app_config().get("update_snooze")
+    if not snooze or snooze.get("version") != version:
+        return False
+    until = snooze.get("until")
+    return True if until is None else time.time() < until
 
 
 def get_nexus_api_key() -> str | None:

@@ -12,7 +12,7 @@ from gi.repository import Adw, GLib, GObject, Gtk, Gio
 from lsmm.core.updater import check_for_update
 from lsmm.core.config import (
     get_steam_root, get_steam_candidates,
-    get_nexus_api_key,
+    get_nexus_api_key, is_update_snoozed,
 )
 from lsmm.core.utils import (
     load_engine as _load_engine,
@@ -32,6 +32,8 @@ from lsmm.gui.dialogs.api_key import show_api_key_dialog, show_nxm_api_key_hint
 from lsmm.gui.dialogs.steam_path import show_steam_path_dialog
 from lsmm.gui.dialogs.first_run import show_first_run_wizard
 from lsmm.gui.dialogs.help import show_help_dialog
+from lsmm.gui.dialogs.settings import show_settings_dialog
+from lsmm.gui.dialogs.update_snooze import show_update_snooze_dialog
 
 
 def _list_store_from_filter(f: Gtk.FileFilter) -> Gio.ListStore:
@@ -68,11 +70,6 @@ class ModManagerWindow(Adw.ApplicationWindow):
         root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self.toast_overlay.set_child(root)
 
-        self.update_banner = Adw.Banner()
-        self.update_banner.set_button_label("Release Notes")
-        self.update_banner.connect("button-clicked", self._on_update_banner_clicked)
-        root.append(self.update_banner)
-
         header = Adw.HeaderBar()
         root.append(header)
 
@@ -96,6 +93,12 @@ class ModManagerWindow(Adw.ApplicationWindow):
         help_btn.set_tooltip_text("Help")
         help_btn.connect("clicked", lambda _: show_help_dialog(self))
         header.pack_start(help_btn)
+
+        settings_btn = Gtk.Button()
+        settings_btn.set_icon_name("preferences-system-symbolic")
+        settings_btn.set_tooltip_text("Settings")
+        settings_btn.connect("clicked", lambda _: show_settings_dialog(self))
+        header.pack_end(settings_btn)
 
         self._sidebar_btn = Gtk.ToggleButton()
         self._sidebar_btn.set_icon_name("sidebar-show-symbolic")
@@ -562,7 +565,7 @@ class ModManagerWindow(Adw.ApplicationWindow):
             return
         api_key = get_nexus_api_key()
         if not api_key:
-            show_api_key_dialog(self)
+            self._toast("Nexus API key not set — open Settings to add one")
             return
         do_check_updates(self, api_key)
 
@@ -646,17 +649,8 @@ class ModManagerWindow(Adw.ApplicationWindow):
         result = check_for_update()
         if result:
             tag, url = result
-            self._update_release_url = url
-            GLib.idle_add(self._show_update_banner, tag)
-
-    def _show_update_banner(self, tag: str):
-        self.update_banner.set_title(f"Update available: {tag}")
-        self.update_banner.set_revealed(True)
-
-    def _on_update_banner_clicked(self, _banner):
-        url = getattr(self, "_update_release_url", None)
-        if url:
-            Gtk.UriLauncher.new(url).launch(self, None, None, None)
+            if not is_update_snoozed(tag):
+                GLib.idle_add(show_update_snooze_dialog, self, tag, url)
 
     # ── Utilities ─────────────────────────────────────────────────────────────
 
