@@ -3,9 +3,13 @@ Bethesda engine plugin — covers Starfield, Skyrim SE, Fallout 4.
 Capabilities: load order, script extender, activation toggle.
 """
 
+import json
 import logging
 import shutil
 import stat
+import subprocess
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 
@@ -243,6 +247,68 @@ class BethesdaEngine(BaseEngine):
         logger.info("\nAdd this to Steam launch options:")
         logger.info(f'  "{script_path}" %command%')
         return script_path
+
+    def get_se_latest_info(self) -> tuple[str, str, str] | None:
+        """Fetch latest SE release from GitHub. Returns (version, download_url, filename) or None."""
+        se = self.profile.get("script_extender", {})
+        repo = se.get("github_repo")
+        prefix = se.get("asset_prefix", "")
+        if not repo:
+            return None
+        api_url = f"https://api.github.com/repos/{repo}/releases/latest"
+        req = urllib.request.Request(
+            api_url,
+            headers={"User-Agent": "lsmm/1.0", "Accept": "application/vnd.github+json"},
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                release = json.loads(resp.read())
+        except (urllib.error.HTTPError, urllib.error.URLError, OSError):
+            return None
+        version = release.get("tag_name", "unknown")
+        for asset in release.get("assets", []):
+            name = asset["name"]
+            if name.startswith(prefix) and name.endswith((".7z", ".zip")):
+                return version, asset["browser_download_url"], name
+        return None
+
+    def download_script_extender(self, on_progress=None) -> None:
+        """Download latest SE from GitHub and extract to game_root."""
+        info = self.get_se_latest_info()
+        if info is None:
+            raise RuntimeError("Could not fetch SE release info from GitHub")
+        _version, url, filename = info
+        tmp = Path(f"/tmp/{filename}")
+        req = urllib.request.Request(url, headers={"User-Agent": "lsmm/1.0"})
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            total = int(resp.headers.get("Content-Length", 0))
+            downloaded = 0
+            with tmp.open("wb") as f:
+                while True:
+                    chunk = resp.read(65536)
+                    if not chunk:
+                        break
+                    f.write(chunk)
+                    downloaded += len(chunk)
+                    if on_progress:
+                        on_progress(downloaded, total)
+        dest = self.paths.game_root
+        dest.mkdir(parents=True, exist_ok=True)
+        suffix = tmp.suffix.lower()
+        if suffix == ".zip":
+            import zipfile
+            with zipfile.ZipFile(tmp) as z:
+                z.extractall(dest)
+        else:
+            result = subprocess.run(
+                ["7z", "x", str(tmp), f"-o{dest}", "-y", "-snl"],
+                capture_output=True,
+            )
+            if result.returncode != 0:
+                raise RuntimeError(
+                    f"7z extraction failed: {result.stderr.decode(errors='replace')}"
+                )
+        tmp.unlink(missing_ok=True)
 
     # ── INI setup ────────────────────────────────────────────────────────────
 

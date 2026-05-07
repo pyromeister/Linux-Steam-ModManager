@@ -8,6 +8,8 @@
   "script_extender": {
     "name": "F4SE",
     "loader_exe": "f4se_loader.exe",
-    "plugins_dir": "Data/F4SE/Plugins"
+    "plugins_dir": "Data/F4SE/Plugins",
+    "github_repo": "ianpatt/f4se",
+    "asset_prefix": "f4se_"
   }
 }

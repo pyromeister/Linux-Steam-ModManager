@@ -108,6 +108,91 @@ def handle_setup_se(win):
     if not win.engine or not win.engine.has_script_extender:
         win._toast("No script extender for this game")
         return
+
+    paths = getattr(win.engine, "paths", None)
+    se = win.engine.profile.get("script_extender", {})
+    se_name = se.get("name", "Script Extender")
+    se_installed = bool(paths and paths.se_loader and paths.se_loader.exists())
+
+    if se_installed:
+        _finish_se_setup(win)
+        return
+
+    # SE not installed — fetch release info and show confirm dialog
+    def fetch_and_confirm():
+        GLib.idle_add(win.status_label.set_text, f"Fetching {se_name} release info…")
+        try:
+            info = win.engine.get_se_latest_info()
+        except Exception as e:
+            GLib.idle_add(win.status_label.set_text, "Ready")
+            GLib.idle_add(win._toast, f"Could not fetch {se_name} info: {e}")
+            return
+        GLib.idle_add(win.status_label.set_text, "Ready")
+        if info is None:
+            GLib.idle_add(
+                win._toast,
+                f"No GitHub release found for {se_name} — install manually and retry",
+            )
+            return
+        version, url, _filename = info
+        dest = str(getattr(paths, "game_root", "unknown"))
+        GLib.idle_add(_show_se_confirm_dialog, win, se_name, version, url, dest)
+
+    threading.Thread(target=fetch_and_confirm, daemon=True).start()
+
+
+def _show_se_confirm_dialog(win, se_name, version, url, dest):
+    dialog = Adw.MessageDialog(
+        transient_for=win,
+        heading=f"Download {se_name} {version}?",
+        body=(
+            f"<b>Source:</b> <tt>{GLib.markup_escape_text(url)}</tt>\n"
+            f"<b>Destination:</b> <tt>{GLib.markup_escape_text(dest)}</tt>\n\n"
+            f"{se_name} is required for script extender mods to work."
+        ),
+    )
+    dialog.set_body_use_markup(True)
+    dialog.add_response("cancel", "Cancel")
+    dialog.add_response("download", "Download & Install")
+    dialog.set_response_appearance("download", Adw.ResponseAppearance.SUGGESTED)
+    dialog.set_default_response("download")
+
+    def on_response(_d, response):
+        if response == "download":
+            _do_download_se(win, se_name)
+
+    dialog.connect("response", on_response)
+    dialog.present()
+
+
+def _do_download_se(win, se_name: str):
+    def run():
+        GLib.idle_add(win._progress_set, 0.0)
+        GLib.idle_add(win.status_label.set_text, f"Downloading {se_name}…")
+
+        def on_progress(downloaded, total):
+            if total > 0:
+                GLib.idle_add(win._progress_set, downloaded / total)
+            GLib.idle_add(
+                win.status_label.set_text,
+                f"Downloading {se_name}… {downloaded // 1024} KB"
+                + (f" / {total // 1024} KB" if total > 0 else ""),
+            )
+
+        try:
+            win.engine.download_script_extender(on_progress=on_progress)
+            GLib.idle_add(win._progress_done)
+            GLib.idle_add(win.status_label.set_text, "Ready")
+            GLib.idle_add(_finish_se_setup, win)
+        except Exception as e:
+            GLib.idle_add(win._progress_done)
+            GLib.idle_add(win.status_label.set_text, "Ready")
+            GLib.idle_add(win._toast, f"{se_name} download failed: {e}")
+
+    threading.Thread(target=run, daemon=True).start()
+
+
+def _finish_se_setup(win):
     try:
         script_path = win.engine.setup_script_extender()
     except Exception as e:

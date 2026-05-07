@@ -8,6 +8,8 @@
   "script_extender": {
     "name": "SKSE",
     "loader_exe": "skse64_loader.exe",
-    "plugins_dir": "Data/SKSE/Plugins"
+    "plugins_dir": "Data/SKSE/Plugins",
+    "github_repo": "ianpatt/skse64",
+    "asset_prefix": "skse64_"
   }
 }

@@ -56,6 +56,13 @@ class ModManagerApp(Adw.Application):
         if assets_dir.exists():
             display = Gdk.Display.get_default()
             Gtk.IconTheme.get_for_display(display).add_search_path(str(assets_dir))
+            css_file = assets_dir / "style.css"
+            if css_file.exists():
+                provider = Gtk.CssProvider()
+                provider.load_from_path(str(css_file))
+                Gtk.StyleContext.add_provider_for_display(
+                    display, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+                )
         if self._window is None:
             self._window = ModManagerWindow(app, pending_nxm=self._pending_nxm_for_activate)
             self._pending_nxm_for_activate = None

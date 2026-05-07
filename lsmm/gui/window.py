@@ -114,6 +114,11 @@ class ModManagerWindow(Adw.ApplicationWindow):
         self.add_action(toggle_action)
         self.get_application().set_accels_for_action("win.toggle-sidebar", ["F9"])
 
+        settings_action = Gio.SimpleAction.new("open-settings", None)
+        settings_action.connect("activate", lambda a, p: show_settings_dialog(self))
+        self.add_action(settings_action)
+        self.get_application().set_accels_for_action("win.open-settings", ["<Ctrl>comma"])
+
         self._profiles_popover_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         self._profiles_popover_box.set_margin_start(12)
         self._profiles_popover_box.set_margin_end(12)
@@ -244,6 +249,7 @@ class ModManagerWindow(Adw.ApplicationWindow):
 
     def _init_steam_path(self):
         self._refresh_games()
+        self.games_list.grab_focus()
         if get_steam_root() is None and get_nexus_api_key() is None:
             # Truly first run — walk the user through full setup.
             show_first_run_wizard(self)

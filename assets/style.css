@@ -1,0 +1,17 @@
+/* Visible focus rings for keyboard/gamepad navigation (Steam Deck Game Mode) */
+
+*:focus-visible {
+    outline: 2px solid @accent_color;
+    outline-offset: 2px;
+}
+
+row:focus-visible,
+.boxed-list row:focus-visible {
+    outline: 2px solid @accent_color;
+    outline-offset: -2px;
+}
+
+button:focus-visible {
+    outline: 2px solid @accent_color;
+    outline-offset: 2px;
+}
