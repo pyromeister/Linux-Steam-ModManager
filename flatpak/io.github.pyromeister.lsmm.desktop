@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=Linux Steam ModManager
+GenericName=Mod Manager
+Comment=Manage mods for Steam games on Linux
+Exec=lsmm-gui %u
+Icon=io.github.pyromeister.lsmm
+Type=Application
+Categories=Game;Utility;
+MimeType=x-scheme-handler/nxm;
+StartupWMClass=lsmm
+X-Flatpak=io.github.pyromeister.lsmm

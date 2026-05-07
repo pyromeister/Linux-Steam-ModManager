@@ -1,0 +1,50 @@
+app-id: io.github.pyromeister.lsmm
+runtime: org.gnome.Platform
+runtime-version: '47'
+sdk: org.gnome.Sdk
+command: lsmm-gui
+
+finish-args:
+  - --share=network
+  - --share=ipc
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --device=dri
+  # Steam libraries and game directories can be at arbitrary paths under $HOME,
+  # including SD card mounts at /run/media. --filesystem=home is required for a
+  # mod manager that reads and writes game data directories.
+  - --filesystem=home
+  - --filesystem=/run/media
+  # Allows invoking LOOT via "flatpak run io.github.loot.loot" from inside sandbox
+  - --talk-name=org.freedesktop.Flatpak
+
+modules:
+  - name: p7zip
+    buildsystem: simple
+    build-commands:
+      - make -j${FLATPAK_BUILDER_N_JOBS:-1} 7z
+      - install -Dm755 bin/7z /app/bin/7z
+    sources:
+      - type: archive
+        url: https://github.com/p7zip-project/p7zip/archive/refs/tags/v17.04.tar.gz
+        sha256: ea029a2e21d2d6ad0a156f6679bd66836204aa78148a4c5e498fe682e77127ef
+
+  - name: lsmm
+    buildsystem: simple
+    build-commands:
+      - pip3 install --no-build-isolation --prefix=/app .
+      - install -Dm644 flatpak/io.github.pyromeister.lsmm.desktop
+          /app/share/applications/io.github.pyromeister.lsmm.desktop
+      - install -Dm644 flatpak/io.github.pyromeister.lsmm.metainfo.xml
+          /app/share/metainfo/io.github.pyromeister.lsmm.metainfo.xml
+      - install -Dm644 assets/hicolor/256x256/apps/lsmm.png
+          /app/share/icons/hicolor/256x256/apps/io.github.pyromeister.lsmm.png
+      - install -Dm644 assets/hicolor/48x48/apps/lsmm.png
+          /app/share/icons/hicolor/48x48/apps/io.github.pyromeister.lsmm.png
+      - install -Dm644 assets/hicolor/scalable/actions/list-drag-handle-symbolic.svg
+          /app/share/icons/hicolor/scalable/actions/list-drag-handle-symbolic.svg
+      - install -Dm644 assets/hicolor/scalable/mimetypes/package-x-generic-symbolic.svg
+          /app/share/icons/hicolor/scalable/mimetypes/package-x-generic-symbolic.svg
+    sources:
+      - type: dir
+        path: ..

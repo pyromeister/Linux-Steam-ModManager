@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.pyromeister.lsmm</id>
+  <name>Linux Steam ModManager</name>
+  <summary>Manage mods for Steam games on Linux</summary>
+  <metadata_license>MIT</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+
+  <developer id="io.github.pyromeister">
+    <name>pyromeister</name>
+  </developer>
+
+  <description>
+    <p>
+      Linux Steam ModManager (LSMM) is a native mod manager for Steam games on Linux.
+      Download and install mods from Nexus Mods directly via nxm:// links, manage
+      load order, resolve conflicts, and run FOMOD installers — all from a clean
+      GTK4 interface optimised for the Steam Deck and desktop use.
+    </p>
+    <ul>
+      <li>Direct Nexus Mods integration via nxm:// protocol handler</li>
+      <li>Automatic archive detection and installation (ZIP, 7z, RAR)</li>
+      <li>FOMOD installer support for complex mod configurations</li>
+      <li>LOOT load order sorting for Bethesda games</li>
+      <li>Multi-library support including Steam Deck SD card</li>
+      <li>Safe uninstall with file tracking and automatic backups</li>
+      <li>First-run setup wizard for Steam path and Nexus API key</li>
+    </ul>
+  </description>
+
+  <launchable type="desktop-id">io.github.pyromeister.lsmm.desktop</launchable>
+
+  <url type="homepage">https://github.com/pyromeister/Linux-Steam-ModManager</url>
+  <url type="bugtracker">https://github.com/pyromeister/Linux-Steam-ModManager/issues</url>
+
+  <provides>
+    <mediatype>x-scheme-handler/nxm</mediatype>
+  </provides>
+
+  <releases>
+    <release version="0.1.1" date="2026-05-07">
+      <description>
+        <p>Initial Flatpak release. Includes FOMOD installer, LOOT integration,
+        NXM protocol handler, first-run wizard, and multi-library SD card support.</p>
+      </description>
+    </release>
+  </releases>
+
+  <content_rating type="oars-1.1"/>
+</component>
