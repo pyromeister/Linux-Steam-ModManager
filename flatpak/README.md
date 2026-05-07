@@ -36,8 +36,8 @@ xdg-mime default io.github.pyromeister.lsmm.desktop x-scheme-handler/nxm
 
 ## Flathub submission checklist
 
-- [ ] Build + install locally confirmed working
-- [ ] Run on Steam Deck (or SteamOS VM) confirmed
+- [x] Build + install locally confirmed working
+- [x] Run on Steam Deck (or SteamOS VM) confirmed
 - [ ] `appstreamcli validate flatpak/io.github.pyromeister.lsmm.metainfo.xml` passes
 - [ ] Screenshots added to metainfo (Flathub requires at least one)
 - [ ] Fork https://github.com/flathub/flathub and open PR
