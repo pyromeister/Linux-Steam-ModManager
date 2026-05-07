@@ -62,9 +62,9 @@ def extract(archive_path: Path, dest: Path) -> None:
     if suffix == ".zip":
         with zipfile.ZipFile(archive_path) as z:
             _safe_extract_zip(z, dest)
-    elif suffix in (".7z", ".rar"):  # 7z strips leading / and .. by default
+    elif suffix in (".7z", ".rar"):  # 7z strips leading / and .. by default; -snl prevents symlink attacks
         result = subprocess.run(
-            ["7z", "x", str(archive_path), f"-o{dest}", "-y"],
+            ["7z", "x", str(archive_path), f"-o{dest}", "-y", "-snl"],
             capture_output=True,
         )
         if result.returncode != 0:
@@ -307,14 +307,20 @@ def install_fomod_files(
     installed: list[Path] = []
     backups: dict[str, str] = {}
     backup_base = BACKUPS_DIR / (game_slug or "unknown") / mod_name
+    extracted_resolved = extracted.resolve()
+    dest_resolved = dest_root.resolve()
 
     for src_rel, dst_rel in fomod_files:
-        src_file = extracted / src_rel
+        src_file = (extracted / src_rel).resolve()
+        if not src_file.is_relative_to(extracted_resolved):
+            raise ValueError(f"FOMOD path traversal blocked (src): {src_rel!r}")
         if not src_file.exists() or not src_file.is_file():
             continue
         if _should_skip(src_file):
             continue
-        dst = dest_root / dst_rel
+        dst = (dest_root / dst_rel).resolve()
+        if not dst.is_relative_to(dest_resolved):
+            raise ValueError(f"FOMOD path traversal blocked (dst): {dst_rel!r}")
 
         if dst.exists():
             bak = backup_base / dst_rel
@@ -347,9 +353,12 @@ def check_conflicts_fomod(
                 key = f
             file_to_mod[key] = mod_name
 
+    dest_resolved = dest_root.resolve()
     conflicts = []
     for _, dst_rel in fomod_files:
-        dst = dest_root / dst_rel
+        dst = (dest_root / dst_rel).resolve()
+        if not dst.is_relative_to(dest_resolved):
+            raise ValueError(f"FOMOD path traversal blocked (dst): {dst_rel!r}")
         try:
             key = str(dst.resolve(strict=False))
         except OSError:

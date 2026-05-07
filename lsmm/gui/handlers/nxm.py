@@ -1,6 +1,8 @@
 import logging
 import threading
 import time
+import urllib.parse
+from pathlib import Path
 
 import gi
 gi.require_version("Gtk", "4.0")
@@ -36,7 +38,9 @@ def do_nxm_import(window, url: str, api_key: str):
                 GLib.idle_add(window._toast, _nxm_error_message(link_err))
                 return
 
-            filename = dl_url.split("/")[-1].split("?")[0]
+            filename = Path(urllib.parse.urlparse(dl_url).path).name
+            if not filename or "\x00" in filename:
+                filename = f"mod_{nxm['mod_id']}_{nxm['file_id']}.zip"
             slug = window._game_slug or "unknown"
             dest = ARCHIVES_DIR / slug / filename
 

@@ -157,8 +157,8 @@ def fetch_collection_graphql(slug: str, api_key: str) -> dict | None:
     headers = _api_headers(api_key) | {"Content-Type": "application/json"}
     query = {
         "query": """
-        {
-            collection(slug: "%s") {
+        query GetCollection($slug: String!) {
+            collection(slug: $slug) {
                 name
                 game { domainName }
                 latestPublishedRevision {
@@ -173,7 +173,8 @@ def fetch_collection_graphql(slug: str, api_key: str) -> dict | None:
                 }
             }
         }
-        """ % slug
+        """,
+        "variables": {"slug": slug},
     }
     try:
         response = json.loads(net.request(url, data=json.dumps(query).encode(), headers=headers))
