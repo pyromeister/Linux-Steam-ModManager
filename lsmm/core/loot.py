@@ -1,8 +1,13 @@
 """LOOT integration — detect and invoke LOOT for Bethesda load order sorting."""
 
+import os
 import shutil
 import subprocess
 from pathlib import Path
+
+
+def _in_flatpak() -> bool:
+    return os.environ.get("FLATPAK_ID") is not None or Path("/.flatpak-info").exists()
 
 _LOOT_FLATPAK_ID = "io.github.loot.loot"
 
@@ -20,8 +25,19 @@ _LOOT_GAME_IDS: dict[str, str] = {
 def detect_loot() -> list[str] | None:
     """Return command prefix to invoke LOOT, or None if not found.
 
-    Checks native `loot` on PATH first, then Flatpak.
+    Inside a Flatpak sandbox, uses flatpak-spawn --host to reach host
+    installations. Outside, checks native loot on PATH first, then Flatpak.
     """
+    if _in_flatpak():
+        result = subprocess.run(
+            ["flatpak-spawn", "--host", "flatpak", "info", _LOOT_FLATPAK_ID],
+            capture_output=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            return ["flatpak-spawn", "--host", "flatpak", "run", _LOOT_FLATPAK_ID]
+        return None
+
     if shutil.which("loot"):
         return ["loot"]
     if shutil.which("flatpak"):
