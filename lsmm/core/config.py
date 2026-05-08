@@ -72,6 +72,30 @@ def is_update_snoozed(version: str) -> bool:
     return True if until is None else time.time() < until
 
 
+def get_check_updates_on_launch() -> bool:
+    return _load_app_config().get("check_updates_on_launch", True)
+
+
+def save_check_updates_on_launch(enabled: bool) -> None:
+    config = _load_app_config()
+    config["check_updates_on_launch"] = enabled
+    _save_app_config(config)
+
+
+def get_path_overrides(app_id: str) -> dict:
+    return _load_app_config().get("path_overrides", {}).get(str(app_id), {})
+
+
+def save_path_overrides(app_id: str, overrides: dict) -> None:
+    config = _load_app_config()
+    po = config.setdefault("path_overrides", {})
+    if overrides:
+        po[str(app_id)] = overrides
+    else:
+        po.pop(str(app_id), None)
+    _save_app_config(config)
+
+
 def get_nexus_api_key() -> str | None:
     return _load_app_config().get("nexus_api_key")
 
@@ -196,6 +220,22 @@ class GamePaths:
         else:
             self.se_loader = None
             self.se_plugins_dir = None
+
+        # Apply user path overrides (persisted per app_id)
+        ov = get_path_overrides(str(app_id))
+        if ov.get("game_root"):
+            self.game_root = Path(ov["game_root"])
+            self.data_dir = self.game_root / "Data"
+        if ov.get("data_dir"):
+            self.data_dir = Path(ov["data_dir"])
+        if ov.get("proton_prefix"):
+            self.proton_prefix = Path(ov["proton_prefix"])
+            self.drive_c = self.proton_prefix / "drive_c"
+        if se:
+            if ov.get("se_loader"):
+                self.se_loader = Path(ov["se_loader"])
+            if ov.get("se_plugins_dir"):
+                self.se_plugins_dir = Path(ov["se_plugins_dir"])
 
     @property
     def plugins_txt(self) -> Path:

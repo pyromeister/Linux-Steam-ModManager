@@ -6,7 +6,9 @@ from gi.repository import Adw, Gtk
 from lsmm.core.config import (
     get_nexus_api_key, save_nexus_api_key,
     get_steam_root, get_steam_candidates, save_steam_root,
+    get_check_updates_on_launch, save_check_updates_on_launch,
 )
+from lsmm.core.version import APP_VERSION
 
 
 def build_settings_panel(window) -> Adw.PreferencesPage:
@@ -29,6 +31,26 @@ def show_settings_dialog(window):
 
 
 def _populate_settings_page(page, window, dialog=None):
+    # ── App ───────────────────────────────────────────────────────────────────
+    app_group = Adw.PreferencesGroup()
+    app_group.set_title("Application")
+    page.add(app_group)
+
+    ver_row = Adw.ActionRow()
+    ver_row.set_title("Version")
+    ver_row.set_subtitle(APP_VERSION)
+    app_group.add(ver_row)
+
+    launch_check_row = Adw.SwitchRow()
+    launch_check_row.set_title("Check for updates on launch")
+    launch_check_row.set_subtitle("Show notification when a new version is available at startup")
+    launch_check_row.set_active(get_check_updates_on_launch())
+    launch_check_row.connect(
+        "notify::active",
+        lambda row, _: save_check_updates_on_launch(row.get_active()),
+    )
+    app_group.add(launch_check_row)
+
     # ── Nexus Mods ────────────────────────────────────────────────────────────
     nexus_group = Adw.PreferencesGroup()
     nexus_group.set_title("Nexus Mods")

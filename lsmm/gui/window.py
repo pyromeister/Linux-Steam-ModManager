@@ -13,6 +13,8 @@ from lsmm.core.updater import check_for_update
 from lsmm.core.config import (
     get_steam_root, get_steam_candidates,
     get_nexus_api_key, is_update_snoozed,
+    get_check_updates_on_launch,
+    get_path_overrides, save_path_overrides,
 )
 from lsmm.core.utils import (
     load_engine as _load_engine,
@@ -183,12 +185,12 @@ class ModManagerWindow(Adw.ApplicationWindow):
             self.load_order_panel, "load-order", "Load Order", "view-sort-descending-symbolic"
         )
         self._lo_page.set_visible(False)
+        view_switcher = Adw.ViewSwitcher()
+        view_switcher.set_stack(self._view_stack)
+        view_switcher.set_policy(Adw.ViewSwitcherPolicy.WIDE)
+        game_view.append(view_switcher)
+        game_view.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
         game_view.append(self._view_stack)
-
-        self._view_switcher_bar = Adw.ViewSwitcherBar()
-        self._view_switcher_bar.set_stack(self._view_stack)
-        self._view_switcher_bar.set_reveal(True)
-        game_view.append(self._view_switcher_bar)
         self._content_stack.add_named(game_view, "game")
 
         # ── Settings page ─────────────────────────────────────────────────────
@@ -449,6 +451,19 @@ class ModManagerWindow(Adw.ApplicationWindow):
         self._mod_engine_content.set_margin_bottom(16)
         scroll.set_child(self._mod_engine_content)
 
+        # ── Panel header (game name + SE subtitle) ────────────────────────────
+        panel_hdr = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        panel_hdr.set_margin_bottom(4)
+        self._engine_title_label = Gtk.Label()
+        self._engine_title_label.add_css_class("heading")
+        self._engine_title_label.set_xalign(0)
+        panel_hdr.append(self._engine_title_label)
+        self._engine_sub_label = Gtk.Label()
+        self._engine_sub_label.add_css_class("dim-label")
+        self._engine_sub_label.set_xalign(0)
+        panel_hdr.append(self._engine_sub_label)
+        self._mod_engine_content.append(panel_hdr)
+
         # ── Script Extender / Framework section ──────────────────────────────
         self._se_group = Adw.PreferencesGroup()
         self._mod_engine_content.append(self._se_group)
@@ -490,6 +505,11 @@ class ModManagerWindow(Adw.ApplicationWindow):
         # ── Installation Paths section ────────────────────────────────────────
         self._paths_group = Adw.PreferencesGroup()
         self._paths_group.set_title("Installation Paths")
+        edit_paths_btn = Gtk.Button(label="Edit")
+        edit_paths_btn.add_css_class("flat")
+        edit_paths_btn.set_valign(Gtk.Align.CENTER)
+        edit_paths_btn.connect("clicked", self._on_edit_paths)
+        self._paths_group.set_header_suffix(edit_paths_btn)
         self._mod_engine_content.append(self._paths_group)
 
         def _make_path_row(title):
@@ -529,12 +549,16 @@ class ModManagerWindow(Adw.ApplicationWindow):
         self._ensure_ini_btn.set_visible(hasattr(self.engine, "ensure_ini"))
         self._update_setup_btn()
 
+        game_name = next((n for s, n in self.games if s == self._game_slug), self._game_slug or "")
+        self._engine_title_label.set_text(game_name)
+
         # ── SE / framework info rows ──────────────────────────────────────────
         paths = getattr(self.engine, "paths", None)
         se = getattr(paths, "script_extender", None) if paths else None
         game_root = getattr(paths, "game_root", None)
         if getattr(self.engine, "has_framework_setup", False):
             fw = getattr(self.engine, "framework_name", "BepInEx")
+            self._engine_sub_label.set_text(fw)
             self._se_group.set_title(fw)
             installed = self.engine.is_framework_installed()
             self._se_version_row.set_subtitle("✓ Installed" if installed else "Not installed")
@@ -542,7 +566,9 @@ class ModManagerWindow(Adw.ApplicationWindow):
             self._set_row(self._se_plugins_dir_row, "", False)
             self._set_row(self._se_launch_row, "", False)
         elif se:
-            self._se_group.set_title(se.get("name", "Script Extender"))
+            se_name = se.get("name", "Script Extender")
+            self._engine_sub_label.set_text(se_name)
+            self._se_group.set_title(se_name)
             se_loader = getattr(paths, "se_loader", None)
             se_installed = bool(se_loader and se_loader.exists())
             self._se_version_row.set_subtitle("✓ Installed" if se_installed else "✗ Not installed")
@@ -560,6 +586,7 @@ class ModManagerWindow(Adw.ApplicationWindow):
                 "wrapper active ✓" if launch_ok else "not set up — run Setup below",
             )
         else:
+            self._engine_sub_label.set_text("Folder-based mod loading")
             self._se_group.set_title("No Script Extender")
             self._se_version_row.set_subtitle("This game uses folder-based mod loading")
             self._set_row(self._se_loader_row, "", False)
@@ -622,6 +649,84 @@ class ModManagerWindow(Adw.ApplicationWindow):
             self._show_verify_warnings(self.engine.paths.verify())
         else:
             self._toast("Verify not supported for this engine")
+
+    def _on_edit_paths(self, _btn):
+        if not self.engine:
+            return
+        app_id = str(self.engine.profile.get("steam_app_id", ""))
+        paths = getattr(self.engine, "paths", None)
+        if not paths:
+            return
+
+        overrides = get_path_overrides(app_id)
+
+        dialog = Adw.PreferencesDialog()
+        dialog.set_title("Edit Installation Paths")
+
+        dlg_page = Adw.PreferencesPage()
+        dlg_page.set_title("Paths")
+        dlg_page.set_icon_name("folder-symbolic")
+        dialog.add(dlg_page)
+
+        paths_grp = Adw.PreferencesGroup()
+        paths_grp.set_title("Override Paths")
+        paths_grp.set_description("Leave blank to use the auto-detected path")
+        dlg_page.add(paths_grp)
+
+        entries: dict[str, Adw.EntryRow] = {}
+
+        def _add_entry(title, key, auto_val):
+            row = Adw.EntryRow()
+            row.set_title(title)
+            row.set_text(overrides.get(key) or "")
+            if auto_val:
+                row.set_input_purpose(Gtk.InputPurpose.FREE_FORM)
+            paths_grp.add(row)
+            entries[key] = row
+
+        _add_entry("Game root", "game_root", paths.game_root)
+        _add_entry("Data dir", "data_dir", paths.data_dir)
+        _add_entry("Proton prefix", "proton_prefix", paths.proton_prefix)
+        se = getattr(paths, "script_extender", None)
+        if se:
+            _add_entry("SE Loader", "se_loader", getattr(paths, "se_loader", None))
+            _add_entry("SE Plugins dir", "se_plugins_dir", getattr(paths, "se_plugins_dir", None))
+
+        action_grp = Adw.PreferencesGroup()
+        dlg_page.add(action_grp)
+
+        reset_row = Adw.ActionRow()
+        reset_row.set_title("Reset to auto-detected")
+        reset_row.set_activatable(True)
+        reset_row.add_suffix(Gtk.Image.new_from_icon_name("edit-clear-symbolic"))
+
+        def _on_reset(_row, *_):
+            for entry in entries.values():
+                entry.set_text("")
+
+        reset_row.connect("activated", _on_reset)
+        action_grp.add(reset_row)
+
+        save_row = Adw.ActionRow()
+        save_row.set_title("Save overrides")
+        save_row.set_activatable(True)
+        save_row.add_suffix(Gtk.Image.new_from_icon_name("document-save-symbolic"))
+
+        def _on_save(_row, *_):
+            new_overrides = {k: v.get_text().strip() for k, v in entries.items() if v.get_text().strip()}
+            save_path_overrides(app_id, new_overrides)
+            try:
+                self.engine = _load_engine(self._game_slug)
+            except Exception:
+                pass
+            self._refresh_mod_engine_tab()
+            dialog.close()
+            self._toast("Path overrides saved")
+
+        save_row.connect("activated", _on_save)
+        action_grp.add(save_row)
+
+        dialog.present(self)
 
     # ── Progress bar helpers ──────────────────────────────────────────────────
 
@@ -1086,6 +1191,8 @@ class ModManagerWindow(Adw.ApplicationWindow):
     # ── Update check ──────────────────────────────────────────────────────────
 
     def _check_for_update(self):
+        if not get_check_updates_on_launch():
+            return
         result = check_for_update()
         if result:
             tag, url = result
