@@ -8,6 +8,7 @@ from lsmm.core.config import (
     find_library_for_app,
     get_all_library_paths,
     get_update_snooze,
+    is_microsd_path,
     is_update_snoozed,
     set_update_snooze,
 )
@@ -144,6 +145,20 @@ def test_find_library_for_app_fallback_to_root(tmp_path, monkeypatch):
 def test_find_library_for_app_no_steam_root(monkeypatch):
     monkeypatch.setattr("lsmm.core.config.get_steam_root", lambda: None)
     assert find_library_for_app(12345) is None
+
+
+# ── is_microsd_path ───────────────────────────────────────────────────────────
+
+def test_is_microsd_path_true_for_run_media():
+    assert is_microsd_path(Path("/run/media/deck/SteamLibrary")) is True
+
+
+def test_is_microsd_path_false_for_home_dir():
+    assert is_microsd_path(Path("/home/user/.local/share/Steam")) is False
+
+
+def test_is_microsd_path_false_for_mnt():
+    assert is_microsd_path(Path("/mnt/games/SteamLibrary")) is False
 
 
 # ── update snooze ─────────────────────────────────────────────────────────────

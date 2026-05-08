@@ -244,6 +244,8 @@ class ModManagerWindow(Adw.ApplicationWindow):
         paths = getattr(self.engine, "paths", None)
         if paths and hasattr(paths, "proton_prefix") and not paths.proton_prefix.exists():
             self._toast(f"{name}: launch the game once via Steam to create the Proton prefix")
+        if paths and getattr(paths, "on_microsd", False):
+            self._toast(f"{name}: game is on microSD — expect slower load times")
 
     # ── Steam path setup ──────────────────────────────────────────────────────
 

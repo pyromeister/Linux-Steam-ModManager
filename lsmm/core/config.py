@@ -129,6 +129,14 @@ def get_all_library_paths(steam_root: Path | None = None) -> list[Path]:
     return _parse_library_paths(root / "steamapps/libraryfolders.vdf")
 
 
+def is_microsd_path(path: Path) -> bool:
+    """Return True if path is on a removable SD card (mounted under /run/media/)."""
+    try:
+        return path.parts[1:3] == ("run", "media")
+    except (AttributeError, TypeError):
+        return False
+
+
 def find_library_for_app(app_id: str | int) -> Path | None:
     """
     Return the Steam library folder that contains the given app ID,
@@ -173,6 +181,7 @@ class GamePaths:
 
         steam_lib = find_library_for_app(app_id) or (Path.home() / ".local/share/Steam")
         self.game_root = steam_lib / "steamapps/common" / subdir
+        self.on_microsd: bool = is_microsd_path(steam_lib)
         self.data_dir = self.game_root / "Data"
         self.proton_prefix = steam_lib / f"steamapps/compatdata/{app_id}/pfx"
         self.drive_c = self.proton_prefix / "drive_c"
@@ -219,6 +228,8 @@ class GamePaths:
         if self.se_loader and not self.se_loader.exists():
             se_name = self.profile["script_extender"]["name"]
             warnings.append(f"{se_name} loader not found: {self.se_loader}")
+        if self.on_microsd:
+            warnings.append("Game is on microSD card — may cause slow load times or issues if card is removed")
         return warnings
 
 
