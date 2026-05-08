@@ -60,22 +60,26 @@ class ModRow(Gtk.ListBoxRow):
                 )
                 link.set_valign(Gtk.Align.CENTER)
                 link.add_css_class("caption")
-                # Strip default LinkButton padding so it sits flush in the meta row
                 link.set_has_frame(False)
                 meta_row.append(link)
 
-            text_parts = []
-            if nexus.get("version"):
-                text_parts.append(f"v{nexus['version']}")
-            if nexus.get("size_kb"):
-                text_parts.append(f"{nexus['size_kb'] / 1024:.1f} MB")
-            if text_parts:
-                meta = Gtk.Label(label="  ".join(text_parts))
-                meta.set_xalign(0)
-                meta.set_valign(Gtk.Align.CENTER)
-                meta.add_css_class("dim-label")
-                meta.add_css_class("caption")
-                meta_row.append(meta)
+            size_kb = nexus.get("size_kb")
+            if size_kb:
+                size_lbl = Gtk.Label(label=f"{size_kb / 1024:.1f} MB")
+                size_lbl.set_xalign(0)
+                size_lbl.set_valign(Gtk.Align.CENTER)
+                size_lbl.add_css_class("dim-label")
+                size_lbl.add_css_class("caption")
+                meta_row.append(size_lbl)
 
             if meta_row.get_first_child() is not None:
                 label_box.append(meta_row)
+
+        # Version chip on the right
+        version = (nexus or {}).get("version") if nexus else None
+        if version:
+            ver_chip = Gtk.Label(label=f"v{version}")
+            ver_chip.add_css_class("dim-label")
+            ver_chip.add_css_class("caption")
+            ver_chip.set_valign(Gtk.Align.CENTER)
+            box.append(ver_chip)

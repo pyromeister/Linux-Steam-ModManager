@@ -96,12 +96,13 @@ class ModManagerWindow(Adw.ApplicationWindow):
 
         settings_action = Gio.SimpleAction.new("open-settings", None)
         settings_action.connect(
-            "activate", lambda a, p: self._content_stack.set_visible_child_name("settings")
+            "activate",
+            lambda a, p: (self._close_games_flyout(), self._content_stack.set_visible_child_name("settings")),
         )
         self.add_action(settings_action)
         self.get_application().set_accels_for_action("win.open-settings", ["<Ctrl>comma"])
 
-        # ── Body: nav rail + separator + content ──────────────────────────────
+        # ── Body: nav rail + separator + content overlay ──────────────────────
         body = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         body.set_vexpand(True)
         root.append(body)
@@ -112,18 +113,8 @@ class ModManagerWindow(Adw.ApplicationWindow):
         nav_rail.add_css_class("navigation-sidebar")
         body.append(nav_rail)
 
-        # Games flyout
-        games_popover = Gtk.Popover()
-        games_popover.set_position(Gtk.PositionType.RIGHT)
-        games_panel = build_games_panel(self)
-        games_panel.set_size_request(260, 480)
-        games_popover.set_child(games_panel)
-        self.games_list.connect("row-activated", lambda lb, row: games_popover.popdown())
-
-        games_btn = Gtk.MenuButton()
-        games_btn.set_popover(games_popover)
+        games_btn = Gtk.Button()
         games_btn.set_size_request(-1, 64)
-        games_btn.set_direction(Gtk.ArrowType.NONE)
         games_btn.set_tooltip_text("Choose game")
         games_inner = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
         games_inner.set_valign(Gtk.Align.CENTER)
@@ -132,6 +123,7 @@ class ModManagerWindow(Adw.ApplicationWindow):
         games_lbl.add_css_class("caption")
         games_inner.append(games_lbl)
         games_btn.set_child(games_inner)
+        games_btn.connect("clicked", lambda _: self._toggle_games_flyout())
         nav_rail.append(games_btn)
 
         spacer = Gtk.Box()
@@ -142,23 +134,60 @@ class ModManagerWindow(Adw.ApplicationWindow):
         settings_btn.set_icon_name("preferences-system-symbolic")
         settings_btn.set_tooltip_text("Settings")
         settings_btn.set_size_request(-1, 64)
-        settings_btn.connect("clicked", lambda _: self._content_stack.set_visible_child_name("settings"))
+        settings_btn.connect("clicked", lambda _: (
+            self._close_games_flyout(),
+            self._content_stack.set_visible_child_name("settings"),
+        ))
         nav_rail.append(settings_btn)
 
         help_btn = Gtk.Button()
         help_btn.set_icon_name("help-about-symbolic")
         help_btn.set_tooltip_text("Help")
         help_btn.set_size_request(-1, 64)
-        help_btn.connect("clicked", lambda _: self._content_stack.set_visible_child_name("help"))
+        help_btn.connect("clicked", lambda _: (
+            self._close_games_flyout(),
+            self._content_stack.set_visible_child_name("help"),
+        ))
         nav_rail.append(help_btn)
 
         # ── Separator ─────────────────────────────────────────────────────────
         body.append(Gtk.Separator(orientation=Gtk.Orientation.VERTICAL))
 
-        # ── Content area ──────────────────────────────────────────────────────
+        # ── Content overlay (flyout + main content) ───────────────────────────
+        content_overlay = Gtk.Overlay()
+        content_overlay.set_hexpand(True)
+        body.append(content_overlay)
+
+        # Build games panel before overlay setup (sets win.games_list etc.)
+        games_panel = build_games_panel(self)
+        games_panel.set_size_request(220, -1)
+        games_panel.add_css_class("card")
+        self.games_list.connect("row-activated", lambda lb, row: self._close_games_flyout())
+
+        self._flyout_revealer = Gtk.Revealer()
+        self._flyout_revealer.set_transition_type(Gtk.RevealerTransitionType.SLIDE_RIGHT)
+        self._flyout_revealer.set_transition_duration(200)
+        self._flyout_revealer.set_halign(Gtk.Align.START)
+        self._flyout_revealer.set_valign(Gtk.Align.FILL)
+        self._flyout_revealer.set_child(games_panel)
+        self._flyout_revealer.set_reveal_child(False)
+
+        self._flyout_backdrop = Gtk.Button()
+        self._flyout_backdrop.add_css_class("flat")
+        self._flyout_backdrop.set_hexpand(True)
+        self._flyout_backdrop.set_vexpand(True)
+        self._flyout_backdrop.set_visible(False)
+        self._flyout_backdrop.connect("clicked", lambda _: self._close_games_flyout())
+
+        flyout_layer = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        flyout_layer.set_halign(Gtk.Align.FILL)
+        flyout_layer.set_valign(Gtk.Align.FILL)
+        flyout_layer.append(self._flyout_revealer)
+        flyout_layer.append(self._flyout_backdrop)
+        content_overlay.add_overlay(flyout_layer)
+
         content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        content.set_hexpand(True)
-        body.append(content)
+        content_overlay.set_child(content)
 
         # Content stack: game view / settings / help
         self._content_stack = Gtk.Stack()
@@ -167,23 +196,15 @@ class ModManagerWindow(Adw.ApplicationWindow):
         self._content_stack.set_transition_duration(120)
         content.append(self._content_stack)
 
-        # ── Game view (ViewStack + switcher bar) ──────────────────────────────
+        # ── Game view (ViewStack + top switcher) ──────────────────────────────
         game_view = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self._view_stack = Adw.ViewStack()
         self._view_stack.set_vexpand(True)
-        self._view_stack.add_titled_with_icon(
-            self._build_profiles_tab(), "profiles", "Profiles", "contact-new-symbolic"
-        )
-        self._view_stack.add_titled_with_icon(
-            self._build_mod_engine_tab(), "mod-engine", "Mod Engine", "application-x-executable-symbolic"
-        )
-        self._view_stack.add_titled_with_icon(
-            self._build_mods_panel(), "mods", "Mods", "package-x-generic-symbolic"
-        )
+        self._view_stack.add_titled(self._build_profiles_tab(), "profiles", "Profiles")
+        self._view_stack.add_titled(self._build_mod_engine_tab(), "mod-engine", "Mod Engine")
+        self._view_stack.add_titled(self._build_mods_panel(), "mods", "Mods")
         self.load_order_panel = build_load_order_panel(self)
-        self._lo_page = self._view_stack.add_titled_with_icon(
-            self.load_order_panel, "load-order", "Load Order", "view-sort-descending-symbolic"
-        )
+        self._lo_page = self._view_stack.add_titled(self.load_order_panel, "load-order", "Load Order")
         self._lo_page.set_visible(False)
         view_switcher = Adw.ViewSwitcher()
         view_switcher.set_stack(self._view_stack)
@@ -451,16 +472,17 @@ class ModManagerWindow(Adw.ApplicationWindow):
         self._mod_engine_content.set_margin_bottom(16)
         scroll.set_child(self._mod_engine_content)
 
-        # ── Panel header (game name + SE subtitle) ────────────────────────────
-        panel_hdr = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        # ── Panel header: "Mod Engine" fixed left + "Game · SE" right ───────────
+        panel_hdr = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         panel_hdr.set_margin_bottom(4)
-        self._engine_title_label = Gtk.Label()
-        self._engine_title_label.add_css_class("heading")
-        self._engine_title_label.set_xalign(0)
-        panel_hdr.append(self._engine_title_label)
+        _hdr_title = Gtk.Label(label="Mod Engine")
+        _hdr_title.add_css_class("heading")
+        _hdr_title.set_hexpand(True)
+        _hdr_title.set_xalign(0)
+        panel_hdr.append(_hdr_title)
         self._engine_sub_label = Gtk.Label()
         self._engine_sub_label.add_css_class("dim-label")
-        self._engine_sub_label.set_xalign(0)
+        self._engine_sub_label.add_css_class("caption")
         panel_hdr.append(self._engine_sub_label)
         self._mod_engine_content.append(panel_hdr)
 
@@ -550,7 +572,6 @@ class ModManagerWindow(Adw.ApplicationWindow):
         self._update_setup_btn()
 
         game_name = next((n for s, n in self.games if s == self._game_slug), self._game_slug or "")
-        self._engine_title_label.set_text(game_name)
 
         # ── SE / framework info rows ──────────────────────────────────────────
         paths = getattr(self.engine, "paths", None)
@@ -558,7 +579,7 @@ class ModManagerWindow(Adw.ApplicationWindow):
         game_root = getattr(paths, "game_root", None)
         if getattr(self.engine, "has_framework_setup", False):
             fw = getattr(self.engine, "framework_name", "BepInEx")
-            self._engine_sub_label.set_text(fw)
+            self._engine_sub_label.set_text(f"{game_name} · {fw}")
             self._se_group.set_title(fw)
             installed = self.engine.is_framework_installed()
             self._se_version_row.set_subtitle("✓ Installed" if installed else "Not installed")
@@ -567,7 +588,7 @@ class ModManagerWindow(Adw.ApplicationWindow):
             self._set_row(self._se_launch_row, "", False)
         elif se:
             se_name = se.get("name", "Script Extender")
-            self._engine_sub_label.set_text(se_name)
+            self._engine_sub_label.set_text(f"{game_name} · {se_name}")
             self._se_group.set_title(se_name)
             se_loader = getattr(paths, "se_loader", None)
             se_installed = bool(se_loader and se_loader.exists())
@@ -586,7 +607,7 @@ class ModManagerWindow(Adw.ApplicationWindow):
                 "wrapper active ✓" if launch_ok else "not set up — run Setup below",
             )
         else:
-            self._engine_sub_label.set_text("Folder-based mod loading")
+            self._engine_sub_label.set_text(f"{game_name} · Folder mods")
             self._se_group.set_title("No Script Extender")
             self._se_version_row.set_subtitle("This game uses folder-based mod loading")
             self._set_row(self._se_loader_row, "", False)
@@ -795,9 +816,24 @@ class ModManagerWindow(Adw.ApplicationWindow):
 
     # ── Steam path setup ──────────────────────────────────────────────────────
 
+    def _toggle_games_flyout(self):
+        if self._flyout_revealer.get_reveal_child():
+            self._close_games_flyout()
+        else:
+            self._open_games_flyout()
+
+    def _open_games_flyout(self):
+        self._flyout_revealer.set_reveal_child(True)
+        self._flyout_backdrop.set_visible(True)
+        GLib.idle_add(self._games_search.grab_focus)
+
+    def _close_games_flyout(self):
+        self._flyout_revealer.set_reveal_child(False)
+        self._flyout_backdrop.set_visible(False)
+
     def _init_steam_path(self):
         self._refresh_games()
-        self.games_list.grab_focus()
+        GLib.idle_add(self._open_games_flyout)
         if get_steam_root() is None and get_nexus_api_key() is None:
             show_first_run_wizard(self)
         elif get_steam_root() is None:
