@@ -81,4 +81,36 @@ def show_help_dialog(win):
         row.set_subtitle(subtitle)
         usage_group.add(row)
 
+    # ── Features ──────────────────────────────────────────────────────────────
+    features_group = Adw.PreferencesGroup()
+    features_group.set_title("Features")
+    page.add(features_group)
+
+    for feature in [
+        "NXM links — one-click Nexus Mods downloads",
+        "FOMOD installer with multi-choice wizard support",
+        "Conflict detection before install, backup on uninstall",
+        "Drag & drop load order + LOOT integration",
+        "Mod profiles — named loadouts per game",
+        "Script extender detection and setup (SFSE, SKSE, F4SE)",
+    ]:
+        row = Adw.ActionRow()
+        row.set_title(feature)
+        features_group.add(row)
+
+    # ── Supported Games ───────────────────────────────────────────────────────
+    games_group = Adw.PreferencesGroup()
+    games_group.set_title("Supported Games")
+    page.add(games_group)
+
+    for engine_name, games_str in [
+        ("Bethesda", "Starfield, Skyrim SE, Fallout 4, Oblivion, FNV, FO3"),
+        ("BepInEx", "Planet Crafter, Craftopia"),
+        ("SMAPI / ModFolder", "Stardew Valley, RimWorld, 7 Days to Die"),
+    ]:
+        row = Adw.ActionRow()
+        row.set_title(engine_name)
+        row.set_subtitle(games_str)
+        games_group.add(row)
+
     dialog.present(win)

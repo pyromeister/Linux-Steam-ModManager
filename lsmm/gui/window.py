@@ -226,6 +226,11 @@ class ModManagerWindow(Adw.ApplicationWindow):
 
     # ── Mod Engine tab ────────────────────────────────────────────────────────
 
+    @staticmethod
+    def _abbrev_path(path) -> str:
+        parts = Path(path).parts
+        return ("…/" + "/".join(parts[-3:])) if len(parts) > 3 else str(path)
+
     def _build_mod_engine_tab(self) -> Gtk.Widget:
         outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
 
@@ -235,67 +240,173 @@ class ModManagerWindow(Adw.ApplicationWindow):
         self._mod_engine_placeholder.set_description("Select a game from the Games menu")
         outer.append(self._mod_engine_placeholder)
 
-        self._mod_engine_content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        scroll = Gtk.ScrolledWindow()
+        scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        scroll.set_vexpand(True)
+        scroll.set_visible(False)
+
+        self._mod_engine_content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
         self._mod_engine_content.set_margin_start(16)
         self._mod_engine_content.set_margin_end(16)
         self._mod_engine_content.set_margin_top(16)
         self._mod_engine_content.set_margin_bottom(16)
-        self._mod_engine_content.set_visible(False)
+        scroll.set_child(self._mod_engine_content)
 
-        self._engine_name_label = Gtk.Label()
-        self._engine_name_label.add_css_class("heading")
-        self._engine_name_label.set_xalign(0)
-        self._mod_engine_content.append(self._engine_name_label)
+        # ── Script Extender / Framework section ──────────────────────────────
+        self._se_group = Adw.PreferencesGroup()
+        self._mod_engine_content.append(self._se_group)
 
-        self._se_status_label = Gtk.Label()
-        self._se_status_label.add_css_class("dim-label")
-        self._se_status_label.set_xalign(0)
-        self._mod_engine_content.append(self._se_status_label)
+        self._se_version_row = Adw.ActionRow()
+        self._se_version_row.set_title("Version")
+        self._se_group.add(self._se_version_row)
 
+        self._se_loader_row = Adw.ActionRow()
+        self._se_loader_row.set_title("Loader")
+        self._se_group.add(self._se_loader_row)
+
+        self._se_plugins_dir_row = Adw.ActionRow()
+        self._se_plugins_dir_row.set_title("Plugins dir")
+        self._se_group.add(self._se_plugins_dir_row)
+
+        self._se_launch_row = Adw.ActionRow()
+        self._se_launch_row.set_title("Steam launch")
+        self._se_group.add(self._se_launch_row)
+
+        # ── Action buttons ────────────────────────────────────────────────────
+        btn_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         self.setup_btn = Gtk.Button()
         self.setup_btn.connect("clicked", self._on_setup_btn)
-        self._mod_engine_content.append(self.setup_btn)
+        btn_row.append(self.setup_btn)
 
         self._ensure_ini_btn = Gtk.Button(label="Ensure INI Settings")
         self._ensure_ini_btn.set_tooltip_text("Add bInvalidateOlderFiles=1 to the game's Custom INI")
         self._ensure_ini_btn.connect("clicked", self._on_ensure_ini)
         self._ensure_ini_btn.set_visible(False)
-        self._mod_engine_content.append(self._ensure_ini_btn)
+        btn_row.append(self._ensure_ini_btn)
 
         verify_btn = Gtk.Button(label="Verify Paths")
         verify_btn.set_tooltip_text("Check that game and script extender paths exist")
         verify_btn.connect("clicked", self._on_verify_paths_btn)
-        self._mod_engine_content.append(verify_btn)
+        btn_row.append(verify_btn)
+        self._mod_engine_content.append(btn_row)
 
-        outer.append(self._mod_engine_content)
+        # ── Installation Paths section ────────────────────────────────────────
+        self._paths_group = Adw.PreferencesGroup()
+        self._paths_group.set_title("Installation Paths")
+        self._mod_engine_content.append(self._paths_group)
+
+        def _make_path_row(title):
+            row = Adw.ActionRow()
+            row.set_title(title)
+            badge = Gtk.Label(label="auto")
+            badge.add_css_class("dim-label")
+            badge.add_css_class("caption")
+            badge.set_margin_start(4)
+            row.add_suffix(badge)
+            return row
+
+        self._path_game_root_row = _make_path_row("Game root")
+        self._paths_group.add(self._path_game_root_row)
+
+        self._path_data_dir_row = _make_path_row("Data dir")
+        self._paths_group.add(self._path_data_dir_row)
+
+        self._path_proton_row = _make_path_row("Proton prefix")
+        self._paths_group.add(self._path_proton_row)
+
+        self._path_plugins_txt_row = _make_path_row("Plugins.txt")
+        self._paths_group.add(self._path_plugins_txt_row)
+
+        outer.append(scroll)
+        self._mod_engine_scroll = scroll
         return outer
-
-    def _get_engine_display(self) -> tuple[str, str]:
-        """Return (framework_name, status_text) for the Mod Engine tab."""
-        if getattr(self.engine, "has_framework_setup", False):
-            fw = getattr(self.engine, "framework_name", "BepInEx")
-            installed = self.engine.is_framework_installed()
-            return fw, "✓ Installed" if installed else "Not installed"
-        se = self.engine.profile.get("script_extender")
-        if se:
-            paths = getattr(self.engine, "paths", None)
-            se_installed = bool(paths and paths.se_loader and paths.se_loader.exists())
-            return se.get("name", "Script Extender"), "✓ Installed" if se_installed else "Not installed"
-        return "No script extender", ""
 
     def _refresh_mod_engine_tab(self):
         if not self.engine:
             self._mod_engine_placeholder.set_visible(True)
-            self._mod_engine_content.set_visible(False)
+            self._mod_engine_scroll.set_visible(False)
             return
 
         self._mod_engine_placeholder.set_visible(False)
-        self._mod_engine_content.set_visible(True)
-        name, status = self._get_engine_display()
-        self._engine_name_label.set_text(name)
-        self._se_status_label.set_text(status)
+        self._mod_engine_scroll.set_visible(True)
         self._ensure_ini_btn.set_visible(hasattr(self.engine, "ensure_ini"))
         self._update_setup_btn()
+
+        # ── SE / framework info rows ──────────────────────────────────────────
+        paths = getattr(self.engine, "paths", None)
+        se = getattr(paths, "script_extender", None) if paths else None
+        if getattr(self.engine, "has_framework_setup", False):
+            fw = getattr(self.engine, "framework_name", "BepInEx")
+            self._se_group.set_title(fw)
+            installed = self.engine.is_framework_installed()
+            self._se_version_row.set_subtitle("✓ Installed" if installed else "Not installed")
+            self._se_loader_row.set_visible(False)
+            self._se_plugins_dir_row.set_visible(False)
+            self._se_launch_row.set_visible(False)
+        elif se:
+            self._se_group.set_title(se.get("name", "Script Extender"))
+            se_loader = getattr(paths, "se_loader", None)
+            se_installed = bool(se_loader and se_loader.exists())
+            self._se_version_row.set_subtitle("✓ Installed" if se_installed else "✗ Not installed")
+            if se_loader:
+                self._se_loader_row.set_subtitle(self._abbrev_path(se_loader))
+                self._se_loader_row.set_visible(True)
+            else:
+                self._se_loader_row.set_visible(False)
+            se_plugins = getattr(paths, "se_plugins_dir", None)
+            if se_plugins:
+                self._se_plugins_dir_row.set_subtitle(self._abbrev_path(se_plugins))
+                self._se_plugins_dir_row.set_visible(True)
+            else:
+                self._se_plugins_dir_row.set_visible(False)
+            game_root = getattr(paths, "game_root", None)
+            launch_sh = (game_root / "se_launch.sh") if game_root else None
+            if launch_sh and launch_sh.exists():
+                self._se_launch_row.set_subtitle("wrapper active ✓")
+            else:
+                self._se_launch_row.set_subtitle("not set up — run Setup below")
+            self._se_launch_row.set_visible(True)
+        else:
+            self._se_group.set_title("No Script Extender")
+            self._se_version_row.set_subtitle("This game uses folder-based mod loading")
+            self._se_loader_row.set_visible(False)
+            self._se_plugins_dir_row.set_visible(False)
+            self._se_launch_row.set_visible(False)
+
+        # ── Installation paths rows ───────────────────────────────────────────
+        if paths:
+            game_root = getattr(paths, "game_root", None)
+            data_dir = getattr(paths, "data_dir", None)
+            proton = getattr(paths, "proton_prefix", None)
+            plugins_txt = None
+            try:
+                plugins_txt = paths.plugins_txt
+            except Exception:
+                pass
+
+            if game_root:
+                exists = game_root.exists()
+                self._path_game_root_row.set_subtitle(
+                    self._abbrev_path(game_root) + ("  ✓" if exists else "  ✗ Not found")
+                )
+            if data_dir:
+                exists = data_dir.exists()
+                self._path_data_dir_row.set_subtitle(
+                    self._abbrev_path(data_dir) + ("  ✓" if exists else "  ✗ Not found")
+                )
+            if proton:
+                exists = proton.exists()
+                self._path_proton_row.set_subtitle(
+                    self._abbrev_path(proton) + ("  ✓" if exists else "  — launch game once to create")
+                )
+            if plugins_txt:
+                self._path_plugins_txt_row.set_subtitle(self._abbrev_path(plugins_txt))
+                self._path_plugins_txt_row.set_visible(True)
+            else:
+                self._path_plugins_txt_row.set_visible(False)
+            self._paths_group.set_visible(True)
+        else:
+            self._paths_group.set_visible(False)
 
     def _on_ensure_ini(self, _btn):
         if not self.engine or not hasattr(self.engine, "ensure_ini"):
