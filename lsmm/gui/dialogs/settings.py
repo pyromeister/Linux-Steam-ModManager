@@ -48,7 +48,7 @@ def show_settings_dialog(window):
     link_row.set_title("Get a free API key")
     link_row.set_subtitle("nexusmods.com → Account → API keys")
     link_row.set_activatable(True)
-    link_row.add_suffix(Gtk.Image.new_from_icon_name("external-link-symbolic"))
+    link_row.add_suffix(Gtk.Image.new_from_icon_name("adw-external-link-symbolic"))
 
     def _open_nexus(_row, *_):
         Gtk.UriLauncher.new(
@@ -88,7 +88,7 @@ def show_settings_dialog(window):
 
     # ── Updates ───────────────────────────────────────────────────────────────
     updates_group = Adw.PreferencesGroup()
-    updates_group.set_title("Updates")
+    updates_group.set_title("Mod Updates")
     page.add(updates_group)
 
     update_row = Adw.ActionRow()
