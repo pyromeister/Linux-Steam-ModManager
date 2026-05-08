@@ -17,6 +17,7 @@ APP_CONFIG_PATH = Path.home() / ".config/linux-mod-manager/config.json"
 ARCHIVES_DIR = Path.home() / ".local/share/linux-mod-manager/archives"
 BACKUPS_DIR = Path.home() / ".local/share/linux-mod-manager/backups"
 MANIFEST_PATH = Path.home() / ".local/share/linux-mod-manager/installed_mods.json"
+STAGING_ROOT = Path.home() / ".local/share/lsmm/staging"
 LOG_PATH = Path.home() / ".local/state/linux-mod-manager/lsmm.log"
 
 # Known Steam data dir locations, checked in order of preference

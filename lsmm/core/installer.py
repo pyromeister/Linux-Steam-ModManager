@@ -271,6 +271,8 @@ def record_install(
     archive_cache: Path | None = None,
     backups: dict[str, str] | None = None,
     nexus_meta: dict | None = None,
+    staged: bool = False,
+    staging_path: Path | None = None,
 ) -> None:
     manifest = load_manifest()
     entry: dict = {
@@ -282,6 +284,9 @@ def record_install(
     }
     if nexus_meta:
         entry["nexus"] = nexus_meta
+    if staged:
+        entry["staged"] = True
+        entry["staging_path"] = str(staging_path) if staging_path else None
     manifest[mod_name] = entry
     save_manifest(manifest)
 

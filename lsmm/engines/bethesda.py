@@ -16,6 +16,13 @@ from pathlib import Path
 from lsmm.engines.base import BaseEngine
 from lsmm.core.config import GamePaths
 from lsmm.core.plugins import PluginsFile
+from lsmm.core.staging import (
+    deploy_mod,
+    get_mod_staging_dir,
+    remove_staged_mod,
+    stage_mod,
+    undeploy_mod,
+)
 from lsmm.core.installer import (
     DLL_EXTENSION,
     PLUGIN_EXTENSIONS,
@@ -60,12 +67,14 @@ class BethesdaEngine(BaseEngine):
         force: bool = False,
         nexus_meta: dict | None = None,
         fomod_files: list[tuple[str, str]] | None = None,
+        staging: bool = False,
     ) -> None:
         """
         Install a mod archive. Raises ConflictError if the mod would overwrite
         files owned by another tracked mod — unless force=True.
         fomod_files: when provided, only these (src, dst) pairs are installed.
         nexus_meta: optional dict with keys game_domain, mod_id, file_id.
+        staging: when True, extract to staging dir and deploy via symlinks.
         """
         name = mod_name or archive_path.stem
         game_slug = self.profile.get("slug")
@@ -81,6 +90,18 @@ class BethesdaEngine(BaseEngine):
                 archive_cache = cache_archive(archive_path, game_slug)
                 logger.info("Installing FOMOD-selected files...")
                 installed, backups = install_fomod_files(tmp, fomod_files, self.paths.data_dir, game_slug, name)
+                staging_used = False
+            elif staging:
+                if not force:
+                    conflicts = check_conflicts(tmp, self.paths.data_dir, load_manifest(), name)
+                    if conflicts:
+                        raise ConflictError(conflicts)
+                archive_cache = cache_archive(archive_path, game_slug)
+                logger.info("Staging files...")
+                stage_mod(archive_path, game_slug, name)
+                installed = deploy_mod(game_slug, name, self.paths.data_dir)
+                backups = {}
+                staging_used = True
             else:
                 if not force:
                     conflicts = check_conflicts(tmp, self.paths.data_dir, load_manifest(), name)
@@ -89,6 +110,7 @@ class BethesdaEngine(BaseEngine):
                 archive_cache = cache_archive(archive_path, game_slug)
                 logger.info("Installing files...")
                 installed, backups = detect_and_install(tmp, self.paths.data_dir, game_slug, name)
+                staging_used = False
 
             plugins_added = []
             plugins_file = PluginsFile.read(self.paths.plugins_txt)
@@ -98,9 +120,11 @@ class BethesdaEngine(BaseEngine):
                     plugins_added.append(dst.name)
             plugins_file.write()
 
+            staging_path = get_mod_staging_dir(game_slug, name) if staging_used else None
             record_install(name, archive_path, installed, game_slug=game_slug,
                            archive_cache=archive_cache, backups=backups,
-                           nexus_meta=nexus_meta)
+                           nexus_meta=nexus_meta, staged=staging_used,
+                           staging_path=staging_path)
 
         logger.info(f"✓ Installed: {name}")
         if plugins_added:
@@ -114,23 +138,32 @@ class BethesdaEngine(BaseEngine):
             logger.warning(f"Not installed: {mod_name}")
             return
 
-        backups = entry.get("backups", {})
         plugins_file = PluginsFile.read(self.paths.plugins_txt)
 
-        for f_str in entry.get("files", []):
-            f = Path(f_str)
-            bak_str = backups.get(f_str)
-            if bak_str:
-                bak = Path(bak_str)
-                if bak.exists():
-                    f.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copy2(bak, f)
-                    bak.unlink()
-            else:
-                if f.exists():
-                    f.unlink()
-            if f.suffix.lower() in PLUGIN_EXTENSIONS:
-                plugins_file.remove(f.name)
+        if entry.get("staged"):
+            game_slug = self.profile.get("slug")
+            undeploy_mod(game_slug, mod_name, self.paths.data_dir)
+            remove_staged_mod(game_slug, mod_name)
+            for f_str in entry.get("files", []):
+                f = Path(f_str)
+                if f.suffix.lower() in PLUGIN_EXTENSIONS:
+                    plugins_file.remove(f.name)
+        else:
+            backups = entry.get("backups", {})
+            for f_str in entry.get("files", []):
+                f = Path(f_str)
+                bak_str = backups.get(f_str)
+                if bak_str:
+                    bak = Path(bak_str)
+                    if bak.exists():
+                        f.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copy2(bak, f)
+                        bak.unlink()
+                else:
+                    if f.exists():
+                        f.unlink()
+                if f.suffix.lower() in PLUGIN_EXTENSIONS:
+                    plugins_file.remove(f.name)
 
         plugins_file.write()
         logger.info(f"✓ Uninstalled: {mod_name}")
