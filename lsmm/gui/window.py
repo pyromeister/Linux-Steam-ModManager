@@ -227,9 +227,14 @@ class ModManagerWindow(Adw.ApplicationWindow):
     # ── Mod Engine tab ────────────────────────────────────────────────────────
 
     @staticmethod
-    def _abbrev_path(path) -> str:
-        parts = Path(path).parts
+    def _abbrev_path(path: Path) -> str:
+        parts = path.parts
         return ("…/" + "/".join(parts[-3:])) if len(parts) > 3 else str(path)
+
+    @staticmethod
+    def _set_row(row: Adw.ActionRow, text: str, visible: bool = True) -> None:
+        row.set_subtitle(text)
+        row.set_visible(visible)
 
     def _build_mod_engine_tab(self) -> Gtk.Widget:
         outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
@@ -335,47 +340,42 @@ class ModManagerWindow(Adw.ApplicationWindow):
         # ── SE / framework info rows ──────────────────────────────────────────
         paths = getattr(self.engine, "paths", None)
         se = getattr(paths, "script_extender", None) if paths else None
+        game_root = getattr(paths, "game_root", None)
         if getattr(self.engine, "has_framework_setup", False):
             fw = getattr(self.engine, "framework_name", "BepInEx")
             self._se_group.set_title(fw)
             installed = self.engine.is_framework_installed()
             self._se_version_row.set_subtitle("✓ Installed" if installed else "Not installed")
-            self._se_loader_row.set_visible(False)
-            self._se_plugins_dir_row.set_visible(False)
-            self._se_launch_row.set_visible(False)
+            self._set_row(self._se_loader_row, "", False)
+            self._set_row(self._se_plugins_dir_row, "", False)
+            self._set_row(self._se_launch_row, "", False)
         elif se:
             self._se_group.set_title(se.get("name", "Script Extender"))
             se_loader = getattr(paths, "se_loader", None)
             se_installed = bool(se_loader and se_loader.exists())
             self._se_version_row.set_subtitle("✓ Installed" if se_installed else "✗ Not installed")
-            if se_loader:
-                self._se_loader_row.set_subtitle(self._abbrev_path(se_loader))
-                self._se_loader_row.set_visible(True)
-            else:
-                self._se_loader_row.set_visible(False)
+            self._set_row(self._se_loader_row, self._abbrev_path(se_loader) if se_loader else "", bool(se_loader))
             se_plugins = getattr(paths, "se_plugins_dir", None)
-            if se_plugins:
-                self._se_plugins_dir_row.set_subtitle(self._abbrev_path(se_plugins))
-                self._se_plugins_dir_row.set_visible(True)
-            else:
-                self._se_plugins_dir_row.set_visible(False)
-            game_root = getattr(paths, "game_root", None)
+            self._set_row(
+                self._se_plugins_dir_row,
+                self._abbrev_path(se_plugins) if se_plugins else "",
+                bool(se_plugins),
+            )
             launch_sh = (game_root / "se_launch.sh") if game_root else None
-            if launch_sh and launch_sh.exists():
-                self._se_launch_row.set_subtitle("wrapper active ✓")
-            else:
-                self._se_launch_row.set_subtitle("not set up — run Setup below")
-            self._se_launch_row.set_visible(True)
+            launch_ok = bool(launch_sh and launch_sh.exists())
+            self._set_row(
+                self._se_launch_row,
+                "wrapper active ✓" if launch_ok else "not set up — run Setup below",
+            )
         else:
             self._se_group.set_title("No Script Extender")
             self._se_version_row.set_subtitle("This game uses folder-based mod loading")
-            self._se_loader_row.set_visible(False)
-            self._se_plugins_dir_row.set_visible(False)
-            self._se_launch_row.set_visible(False)
+            self._set_row(self._se_loader_row, "", False)
+            self._set_row(self._se_plugins_dir_row, "", False)
+            self._set_row(self._se_launch_row, "", False)
 
         # ── Installation paths rows ───────────────────────────────────────────
         if paths:
-            game_root = getattr(paths, "game_root", None)
             data_dir = getattr(paths, "data_dir", None)
             proton = getattr(paths, "proton_prefix", None)
             plugins_txt = None
