@@ -5,24 +5,29 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gtk
 
+from lsmm.core.version import APP_VERSION
 
-def _try_get_version() -> str:
-    try:
-        from importlib.metadata import version
-        return version("lsmm")
-    except Exception:
-        return ""
+
+def build_help_panel(win) -> Adw.PreferencesPage:
+    page = Adw.PreferencesPage()
+    page.set_title("Help & About")
+    page.set_icon_name("help-about-symbolic")
+    _populate_help_page(page, win)
+    return page
 
 
 def show_help_dialog(win):
     dialog = Adw.PreferencesDialog()
     dialog.set_title("Help & About")
-
     page = Adw.PreferencesPage()
     page.set_title("Linux Steam ModManager")
     page.set_icon_name("help-about-symbolic")
     dialog.add(page)
+    _populate_help_page(page, win)
+    dialog.present(win)
 
+
+def _populate_help_page(page, win):
     # ── About ─────────────────────────────────────────────────────────────────
     about_group = Adw.PreferencesGroup()
     about_group.set_title("About")
@@ -30,8 +35,7 @@ def show_help_dialog(win):
 
     app_row = Adw.ActionRow()
     app_row.set_title("Linux Steam ModManager")
-    ver = _try_get_version()
-    app_row.set_subtitle(f"Version {ver}" if ver else "Mod manager for Steam games on Linux and Steam Deck")
+    app_row.set_subtitle(f"Version {APP_VERSION} · Mod manager for Steam games on Linux and Steam Deck")
     about_group.add(app_row)
 
     for label, url in [
@@ -68,8 +72,6 @@ def show_help_dialog(win):
         ("Import from Nexus…",
          "Paste an nxm:// link from the Nexus Mods website. "
          "Requires a free API key (nexusmods.com → Account → API Keys)."),
-        ("Check (header)",
-         "Verifies that the game folder and Script Extender files exist at the expected paths."),
         ("Custom game profiles",
          "Drop a <game>.json file into ~/.config/linux-mod-manager/games/ "
          "to add a game or override a bundled profile."),
@@ -80,37 +82,3 @@ def show_help_dialog(win):
         row.set_title(title)
         row.set_subtitle(subtitle)
         usage_group.add(row)
-
-    # ── Features ──────────────────────────────────────────────────────────────
-    features_group = Adw.PreferencesGroup()
-    features_group.set_title("Features")
-    page.add(features_group)
-
-    for feature in [
-        "NXM links — one-click Nexus Mods downloads",
-        "FOMOD installer with multi-choice wizard support",
-        "Conflict detection before install, backup on uninstall",
-        "Drag & drop load order + LOOT integration",
-        "Mod profiles — named loadouts per game",
-        "Script extender detection and setup (SFSE, SKSE, F4SE)",
-    ]:
-        row = Adw.ActionRow()
-        row.set_title(feature)
-        features_group.add(row)
-
-    # ── Supported Games ───────────────────────────────────────────────────────
-    games_group = Adw.PreferencesGroup()
-    games_group.set_title("Supported Games")
-    page.add(games_group)
-
-    for engine_name, games_str in [
-        ("Bethesda", "Starfield, Skyrim SE, Fallout 4, Oblivion, FNV, FO3"),
-        ("BepInEx", "Planet Crafter, Craftopia"),
-        ("SMAPI / ModFolder", "Stardew Valley, RimWorld, 7 Days to Die"),
-    ]:
-        row = Adw.ActionRow()
-        row.set_title(engine_name)
-        row.set_subtitle(games_str)
-        games_group.add(row)
-
-    dialog.present(win)

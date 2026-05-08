@@ -9,15 +9,26 @@ from lsmm.core.config import (
 )
 
 
+def build_settings_panel(window) -> Adw.PreferencesPage:
+    page = Adw.PreferencesPage()
+    page.set_title("Settings")
+    page.set_icon_name("preferences-system-symbolic")
+    _populate_settings_page(page, window)
+    return page
+
+
 def show_settings_dialog(window):
     dialog = Adw.PreferencesDialog()
     dialog.set_title("Settings")
-
     page = Adw.PreferencesPage()
     page.set_title("General")
     page.set_icon_name("preferences-system-symbolic")
     dialog.add(page)
+    _populate_settings_page(page, window, dialog=dialog)
+    dialog.present(window)
 
+
+def _populate_settings_page(page, window, dialog=None):
     # ── Nexus Mods ────────────────────────────────────────────────────────────
     nexus_group = Adw.PreferencesGroup()
     nexus_group.set_title("Nexus Mods")
@@ -116,7 +127,8 @@ def show_settings_dialog(window):
                 check_btn.set_label("Check Now")
                 if result:
                     tag, url = result
-                    dialog.close()
+                    if dialog:
+                        dialog.close()
                     show_update_snooze_dialog(window, tag, url)
                 else:
                     window._toast("Linux Steam ModManager is up to date")
@@ -126,5 +138,3 @@ def show_settings_dialog(window):
 
     check_btn.connect("clicked", _check)
     update_row.add_suffix(check_btn)
-
-    dialog.present(window)

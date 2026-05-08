@@ -23,7 +23,7 @@ from lsmm.gui.widgets.mod_row import ModRow
 from lsmm.gui.handlers.install import install_batch, do_uninstall
 from lsmm.gui.handlers.nxm import do_nxm_import
 from lsmm.gui.handlers.updates import do_check_updates
-from lsmm.gui.handlers.collection import rebuild_profiles_popover
+
 from lsmm.gui.handlers.games import build_games_panel, refresh_games
 from lsmm.gui.handlers.load_order import build_load_order_panel, refresh_load_order
 from lsmm.gui.handlers import setup as setup_handler
@@ -31,8 +31,8 @@ from lsmm.core import profiles as _prof
 from lsmm.gui.dialogs.api_key import show_api_key_dialog, show_nxm_api_key_hint
 from lsmm.gui.dialogs.steam_path import show_steam_path_dialog
 from lsmm.gui.dialogs.first_run import show_first_run_wizard
-from lsmm.gui.dialogs.help import show_help_dialog
-from lsmm.gui.dialogs.settings import show_settings_dialog
+from lsmm.gui.dialogs.help import build_help_panel
+from lsmm.gui.dialogs.settings import build_settings_panel
 from lsmm.gui.dialogs.update_snooze import show_update_snooze_dialog
 
 
@@ -85,10 +85,6 @@ class ModManagerWindow(Adw.ApplicationWindow):
         header = Adw.HeaderBar()
         root.append(header)
 
-        check_btn = Gtk.Button(label="Check")
-        check_btn.connect("clicked", self._on_check)
-        header.pack_end(check_btn)
-
         self.launch_btn = Gtk.Button(label="▶ Launch")
         self.launch_btn.add_css_class("suggested-action")
         self.launch_btn.set_tooltip_text("Launch game via Steam")
@@ -97,7 +93,9 @@ class ModManagerWindow(Adw.ApplicationWindow):
         header.pack_end(self.launch_btn)
 
         settings_action = Gio.SimpleAction.new("open-settings", None)
-        settings_action.connect("activate", lambda a, p: show_settings_dialog(self))
+        settings_action.connect(
+            "activate", lambda a, p: self._content_stack.set_visible_child_name("settings")
+        )
         self.add_action(settings_action)
         self.get_application().set_accels_for_action("win.open-settings", ["<Ctrl>comma"])
 
@@ -142,14 +140,14 @@ class ModManagerWindow(Adw.ApplicationWindow):
         settings_btn.set_icon_name("preferences-system-symbolic")
         settings_btn.set_tooltip_text("Settings")
         settings_btn.set_size_request(-1, 64)
-        settings_btn.connect("clicked", lambda _: show_settings_dialog(self))
+        settings_btn.connect("clicked", lambda _: self._content_stack.set_visible_child_name("settings"))
         nav_rail.append(settings_btn)
 
         help_btn = Gtk.Button()
         help_btn.set_icon_name("help-about-symbolic")
         help_btn.set_tooltip_text("Help")
         help_btn.set_size_request(-1, 64)
-        help_btn.connect("clicked", lambda _: show_help_dialog(self))
+        help_btn.connect("clicked", lambda _: self._content_stack.set_visible_child_name("help"))
         nav_rail.append(help_btn)
 
         # ── Separator ─────────────────────────────────────────────────────────
@@ -160,6 +158,15 @@ class ModManagerWindow(Adw.ApplicationWindow):
         content.set_hexpand(True)
         body.append(content)
 
+        # Content stack: game view / settings / help
+        self._content_stack = Gtk.Stack()
+        self._content_stack.set_vexpand(True)
+        self._content_stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
+        self._content_stack.set_transition_duration(120)
+        content.append(self._content_stack)
+
+        # ── Game view (ViewStack + switcher bar) ──────────────────────────────
+        game_view = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self._view_stack = Adw.ViewStack()
         self._view_stack.set_vexpand(True)
         self._view_stack.add_titled_with_icon(
@@ -176,14 +183,21 @@ class ModManagerWindow(Adw.ApplicationWindow):
             self.load_order_panel, "load-order", "Load Order", "view-sort-descending-symbolic"
         )
         self._lo_page.set_visible(False)
-        content.append(self._view_stack)
+        game_view.append(self._view_stack)
 
         self._view_switcher_bar = Adw.ViewSwitcherBar()
         self._view_switcher_bar.set_stack(self._view_stack)
         self._view_switcher_bar.set_reveal(True)
-        content.append(self._view_switcher_bar)
+        game_view.append(self._view_switcher_bar)
+        self._content_stack.add_named(game_view, "game")
 
-        # ── Status bar ────────────────────────────────────────────────────────
+        # ── Settings page ─────────────────────────────────────────────────────
+        self._content_stack.add_named(build_settings_panel(self), "settings")
+
+        # ── Help page ─────────────────────────────────────────────────────────
+        self._content_stack.add_named(build_help_panel(self), "help")
+
+        # ── Status bar (always visible below content stack) ───────────────────
         status_bar = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
 
         self.status_label = Gtk.Label(label="Ready")
@@ -210,19 +224,197 @@ class ModManagerWindow(Adw.ApplicationWindow):
     # ── Profiles tab ──────────────────────────────────────────────────────────
 
     def _build_profiles_tab(self) -> Gtk.Widget:
+        panel = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+
+        header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        header.set_margin_start(12)
+        header.set_margin_end(12)
+        header.set_margin_top(12)
+        header.set_margin_bottom(8)
+        title = Gtk.Label(label="Profiles")
+        title.add_css_class("heading")
+        title.set_hexpand(True)
+        title.set_xalign(0)
+        header.append(title)
+        self._profiles_active_label = Gtk.Label()
+        self._profiles_active_label.add_css_class("dim-label")
+        self._profiles_active_label.add_css_class("caption")
+        self._profiles_active_label.set_valign(Gtk.Align.CENTER)
+        header.append(self._profiles_active_label)
+        panel.append(header)
+
+        self._profiles_no_game = Gtk.Label(label="Select a game first")
+        self._profiles_no_game.add_css_class("dim-label")
+        self._profiles_no_game.set_vexpand(True)
+        panel.append(self._profiles_no_game)
+
         scroll = Gtk.ScrolledWindow()
         scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        scroll.set_vexpand(True)
+        scroll.set_visible(False)
+        self._profiles_list = Gtk.ListBox()
+        self._profiles_list.set_selection_mode(Gtk.SelectionMode.NONE)
+        self._profiles_list.add_css_class("boxed-list")
+        self._profiles_list.set_margin_start(12)
+        self._profiles_list.set_margin_end(12)
+        self._profiles_list.set_margin_bottom(4)
+        scroll.set_child(self._profiles_list)
+        panel.append(scroll)
+        self._profiles_scroll = scroll
 
-        self._profiles_popover_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        self._profiles_popover_box.set_margin_start(12)
-        self._profiles_popover_box.set_margin_end(12)
-        self._profiles_popover_box.set_margin_top(10)
-        self._profiles_popover_box.set_margin_bottom(10)
-        scroll.set_child(self._profiles_popover_box)
-        return scroll
+        btn_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        btn_bar.set_margin_start(12)
+        btn_bar.set_margin_end(12)
+        btn_bar.set_margin_top(8)
+        btn_bar.set_margin_bottom(12)
+        new_btn = Gtk.Button(label="+ New Profile")
+        new_btn.set_hexpand(True)
+        new_btn.connect("clicked", self._on_new_profile)
+        btn_bar.append(new_btn)
+        import_btn = Gtk.Button(label="Import Modpack…")
+        import_btn.set_hexpand(True)
+        import_btn.connect("clicked", self._on_import_modpack)
+        btn_bar.append(import_btn)
+        panel.append(btn_bar)
+
+        # Kept for backward compat with collection.py handlers that reference it
+        self._profiles_popover_box = Gtk.Box()
+        self._profiles_popover_box.set_visible(False)
+        panel.append(self._profiles_popover_box)
+
+        return panel
 
     def _refresh_profiles_tab(self):
-        rebuild_profiles_popover(self, _TabRef(self._refresh_profiles_tab))
+        if not self.engine or not self._game_slug:
+            self._profiles_no_game.set_visible(True)
+            self._profiles_scroll.set_visible(False)
+            self._profiles_active_label.set_text("")
+            return
+
+        self._profiles_no_game.set_visible(False)
+        self._profiles_scroll.set_visible(True)
+
+        while child := self._profiles_list.get_first_child():
+            self._profiles_list.remove(child)
+
+        slug = self._game_slug
+        all_profiles = _prof.load_all(slug)
+        active_name = _prof.get_active(slug)
+        self._profiles_active_label.set_text(f"Active: {active_name}" if active_name else "")
+
+        for name, data in all_profiles.items():
+            self._profiles_list.append(self._make_profile_row(name, data, active_name, slug))
+
+    def _make_profile_row(self, name: str, data: dict, active_name: str | None, slug: str):
+        row = Adw.ActionRow()
+        row.set_title(name)
+        mod_count = len(data.get("active_mods", []))
+        row.set_subtitle(f"{mod_count} mod{'s' if mod_count != 1 else ''}")
+
+        if name == active_name:
+            check = Gtk.Image.new_from_icon_name("emblem-default-symbolic")
+            check.add_css_class("success")
+            row.add_prefix(check)
+
+        load_btn = Gtk.Button(label="Load")
+        load_btn.set_valign(Gtk.Align.CENTER)
+        load_btn.add_css_class("flat" if name == active_name else "suggested-action")
+        load_btn.connect("clicked", lambda _b, n=name: self._on_load_profile(n))
+        row.add_suffix(load_btn)
+
+        rename_btn = Gtk.Button(label="Rename")
+        rename_btn.set_valign(Gtk.Align.CENTER)
+        rename_btn.add_css_class("flat")
+        rename_btn.connect("clicked", lambda _b, n=name: self._on_rename_profile(n))
+        row.add_suffix(rename_btn)
+
+        del_btn = Gtk.Button()
+        del_btn.set_icon_name("user-trash-symbolic")
+        del_btn.set_valign(Gtk.Align.CENTER)
+        del_btn.add_css_class("flat")
+        del_btn.connect("clicked", lambda _b, n=name: self._on_delete_profile(n))
+        row.add_suffix(del_btn)
+
+        return row
+
+    def _on_new_profile(self, _btn):
+        if not self.engine:
+            self._toast("Select a game first")
+            return
+        dialog = Adw.MessageDialog(transient_for=self, heading="New Profile")
+        entry = Gtk.Entry()
+        entry.set_placeholder_text("Profile name")
+        entry.set_activates_default(True)
+        entry.set_margin_start(16)
+        entry.set_margin_end(16)
+        entry.set_margin_bottom(8)
+        dialog.set_extra_child(entry)
+        dialog.add_response("cancel", "Cancel")
+        dialog.add_response("save", "Save")
+        dialog.set_response_appearance("save", Adw.ResponseAppearance.SUGGESTED)
+        dialog.set_default_response("save")
+        dialog.set_close_response("cancel")
+
+        def on_response(_d, response):
+            if response != "save":
+                return
+            pname = entry.get_text().strip()
+            if not pname:
+                self._toast("Profile name cannot be empty")
+                return
+            active = [m["name"] for m in self.engine.list_mods() if m["active"]]
+            order = self.engine.get_load_order() if self.engine.has_load_order else []
+            _prof.save(self._game_slug, pname, active, order)
+            self._toast(f"Saved profile: {pname}")
+            self._refresh_profiles_tab()
+
+        dialog.connect("response", on_response)
+        dialog.present()
+
+    def _on_load_profile(self, name: str):
+        from lsmm.gui.handlers.collection import apply_profile
+        apply_profile(self, self._game_slug, name)
+        self._refresh_profiles_tab()
+
+    def _on_delete_profile(self, name: str):
+        _prof.delete(self._game_slug, name)
+        if _prof.get_active(self._game_slug) == name:
+            _prof.set_active(self._game_slug, None)
+        self._toast(f"Deleted profile: {name}")
+        self._refresh_profiles_tab()
+
+    def _on_rename_profile(self, old_name: str):
+        from lsmm.gui.handlers.collection import _show_rename_dialog
+        _show_rename_dialog(self, _TabRef(self._refresh_profiles_tab), self._game_slug, old_name)
+
+    def _on_import_modpack(self, _btn):
+        from lsmm.gui.handlers.collection import on_import_collection
+        if not self.engine:
+            self._toast("Select a game first")
+            return
+        dialog = Adw.MessageDialog(transient_for=self, heading="Import Modpack from Nexus")
+        entry = Gtk.Entry()
+        entry.set_placeholder_text("https://www.nexusmods.com/…/collections/…")
+        entry.set_activates_default(True)
+        entry.set_margin_start(16)
+        entry.set_margin_end(16)
+        entry.set_margin_bottom(8)
+        dialog.set_extra_child(entry)
+        dialog.add_response("cancel", "Cancel")
+        dialog.add_response("import", "Import")
+        dialog.set_response_appearance("import", Adw.ResponseAppearance.SUGGESTED)
+        dialog.set_default_response("import")
+        dialog.set_close_response("cancel")
+
+        def on_response(_d, response):
+            if response != "import":
+                return
+            url = entry.get_text().strip()
+            if url:
+                on_import_collection(self, url)
+
+        dialog.connect("response", on_response)
+        dialog.present()
 
     # ── Mod Engine tab ────────────────────────────────────────────────────────
 
@@ -481,6 +673,7 @@ class ModManagerWindow(Adw.ApplicationWindow):
 
         self._game_slug = slug
         self.set_title(f"Linux Steam ModManager — {name}")
+        self._content_stack.set_visible_child_name("game")
         self._update_load_order_panel()
         self._refresh_mods()
         self._refresh_load_order()
