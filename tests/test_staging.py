@@ -3,10 +3,7 @@
 import zipfile
 from pathlib import Path
 
-import pytest
-
 from lsmm.core.staging import (
-    STAGING_ROOT,
     deploy_mod,
     get_mod_staging_dir,
     get_staging_dir,
