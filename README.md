@@ -53,25 +53,25 @@ LSMM is a native GTK4 mod manager that handles the full mod lifecycle — downlo
 
 ## Installation
 
-**Option A — Flatpak** *(coming to Flathub)*
+**Option A — Flatpak** *(coming to Flathub — not yet released)*
 
-```bash
-# Build from source (see flatpak/README.md)
-flatpak-builder --user --install --force-clean build-flatpak \
-    flatpak/io.github.pyromeister.lsmm.yml
-```
+**Option B — from source**
 
-**Option B — pip**
-
-```bash
-pip install .
-```
-
-Requirements: Python 3.10+, GTK4 + libadwaita, p7zip
+1. Install system dependencies (Ubuntu/Debian):
 
 ```bash
 sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 p7zip-full
 ```
+
+2. Clone and install:
+
+```bash
+git clone https://github.com/pyromeister/Linux-Steam-ModManager.git
+cd Linux-Steam-ModManager
+pip install --user .
+```
+
+Requirements: Python 3.10+, GTK4, libadwaita 1.x, p7zip
 
 ---
 
