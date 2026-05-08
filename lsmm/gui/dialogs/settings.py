@@ -86,31 +86,43 @@ def show_settings_dialog(window):
     detect_btn.connect("clicked", _detect)
     steam_row.add_suffix(detect_btn)
 
-    # ── Updates ───────────────────────────────────────────────────────────────
+    # ── App Updates ───────────────────────────────────────────────────────────
     updates_group = Adw.PreferencesGroup()
-    updates_group.set_title("Mod Updates")
+    updates_group.set_title("App Updates")
     page.add(updates_group)
 
     update_row = Adw.ActionRow()
     update_row.set_title("Check for updates")
-    update_row.set_subtitle("Check Nexus Mods for newer versions of installed mods")
+    update_row.set_subtitle("Check GitHub for a newer version of Linux Steam ModManager")
     updates_group.add(update_row)
 
     check_btn = Gtk.Button(label="Check Now")
     check_btn.set_valign(Gtk.Align.CENTER)
 
     def _check(_btn):
-        from lsmm.core.config import get_nexus_api_key as _get_key
-        from lsmm.gui.handlers.updates import do_check_updates
-        api_key = _get_key()
-        if not api_key:
-            window._toast("Nexus API key not set — add one above")
-            return
-        if not window.engine:
-            window._toast("Select a game first")
-            return
-        dialog.close()
-        do_check_updates(window, api_key)
+        import threading
+        from lsmm.core.updater import check_for_update
+        from lsmm.gui.dialogs.update_snooze import show_update_snooze_dialog
+        from gi.repository import GLib
+
+        check_btn.set_sensitive(False)
+        check_btn.set_label("Checking…")
+
+        def run():
+            result = check_for_update()
+
+            def done():
+                check_btn.set_sensitive(True)
+                check_btn.set_label("Check Now")
+                if result:
+                    tag, url = result
+                    dialog.close()
+                    show_update_snooze_dialog(window, tag, url)
+                else:
+                    window._toast("Linux Steam ModManager is up to date")
+            GLib.idle_add(done)
+
+        threading.Thread(target=run, daemon=True).start()
 
     check_btn.connect("clicked", _check)
     update_row.add_suffix(check_btn)

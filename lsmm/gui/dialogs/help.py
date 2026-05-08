@@ -1,44 +1,84 @@
-"""Help dialog for the mod manager."""
+"""Help / About dialog for the mod manager."""
 
 import gi
+gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw
+from gi.repository import Adw, Gtk
+
+
+def _try_get_version() -> str:
+    try:
+        from importlib.metadata import version
+        return version("lsmm")
+    except Exception:
+        return ""
 
 
 def show_help_dialog(win):
-    dialog = Adw.MessageDialog(
-        transient_for=win,
-        heading="How to use the Mod Manager",
-        body=(
-            "<b>Installed Mods panel (left)</b>\n"
-            "Shows all mods tracked by the manager. "
-            "Check/uncheck a mod to enable or disable it (toggles its plugin in the load order).\n\n"
-            "<b>Load Order panel (right)</b>\n"
-            "Lists all active plugins in the order the game loads them. "
-            "Drag rows to reorder. Click <b>Save Order</b> to write the new order — "
-            "you must save or your changes will be lost on close.\n\n"
-            "<b>+ Install</b>\n"
-            "Opens a file picker. Select one or more .zip / .7z / .rar archives. "
-            "Each archive is extracted and its files are placed in the correct Data/ folder automatically.\n\n"
-            "<b>Setup SE</b>\n"
-            "Creates a launch script for the Script Extender (SFSE/SKSE/F4SE). "
-            "After clicking, copy the displayed text into Steam → game Properties → Launch Options.\n\n"
-            "<b>Check</b>\n"
-            "Verifies that the game folder and Script Extender files exist at the expected paths.\n\n"
-            "<b>SE Plugin</b> tag in mod list\n"
-            "Mods shown with this tag are DLL plugins found in the SE plugins folder. "
-            "They were not installed through this manager — remove them manually if needed.\n\n"
-            "<b>NXM URL</b> (experimental)\n"
-            'Click "NXM URL", paste an <tt>nxm://</tt> link from Nexus Mods. '
-            "Requires a free Nexus API key (nexusmods.com → Account → API Keys).\n\n"
-            "<b>Custom game profiles</b>\n"
-            "Drop a <tt>&lt;slug&gt;.json</tt> file into "
-            "<tt>~/.config/linux-mod-manager/games/</tt> to add a new game or override a "
-            "bundled profile. The file format is documented on GitHub.\n\n"
-            '<a href="https://github.com/pyromaster/linux-sfse-modlauncher">'
-            "GitHub Repository</a>"
-        ),
-    )
-    dialog.set_body_use_markup(True)
-    dialog.add_response("ok", "Got it")
-    dialog.present()
+    dialog = Adw.PreferencesDialog()
+    dialog.set_title("Help & About")
+
+    page = Adw.PreferencesPage()
+    page.set_title("Linux Steam ModManager")
+    page.set_icon_name("help-about-symbolic")
+    dialog.add(page)
+
+    # ── About ─────────────────────────────────────────────────────────────────
+    about_group = Adw.PreferencesGroup()
+    about_group.set_title("About")
+    page.add(about_group)
+
+    app_row = Adw.ActionRow()
+    app_row.set_title("Linux Steam ModManager")
+    ver = _try_get_version()
+    app_row.set_subtitle(f"Version {ver}" if ver else "Mod manager for Steam games on Linux and Steam Deck")
+    about_group.add(app_row)
+
+    for label, url in [
+        ("GitHub Repository", "https://github.com/pyromeister/Linux-Steam-ModManager"),
+        ("Report an Issue", "https://github.com/pyromeister/Linux-Steam-ModManager/issues"),
+    ]:
+        row = Adw.ActionRow()
+        row.set_title(label)
+        row.set_activatable(True)
+        row.add_suffix(Gtk.Image.new_from_icon_name("adw-external-link-symbolic"))
+        _url = url
+        row.connect("activated", lambda r, u=_url: Gtk.UriLauncher.new(u).launch(win, None, None, None))
+        about_group.add(row)
+
+    # ── How to use ────────────────────────────────────────────────────────────
+    usage_group = Adw.PreferencesGroup()
+    usage_group.set_title("How to use")
+    page.add(usage_group)
+
+    sections = [
+        ("Mods tab", "Shows all tracked mods. Toggle the checkbox to enable or disable a mod."),
+        ("Load Order tab",
+         "Lists active plugins in load order. Drag rows to reorder. "
+         "Click Save Order — unsaved changes are lost on close."),
+        ("Profiles tab",
+         "Save the current mod selection as a named profile. Load a profile to restore "
+         "a previous mod set and load order."),
+        ("Mod Engine tab",
+         "Download and configure the Script Extender (SFSE/SKSE/F4SE) or BepInEx. "
+         "After setup, copy the shown launch option into Steam → game Properties → Launch Options."),
+        ("+ Install",
+         "Select one or more .zip / .7z / .rar archives. "
+         "Files are extracted and placed in the game's Data/ folder automatically."),
+        ("Import from Nexus…",
+         "Paste an nxm:// link from the Nexus Mods website. "
+         "Requires a free API key (nexusmods.com → Account → API Keys)."),
+        ("Check (header)",
+         "Verifies that the game folder and Script Extender files exist at the expected paths."),
+        ("Custom game profiles",
+         "Drop a <game>.json file into ~/.config/linux-mod-manager/games/ "
+         "to add a game or override a bundled profile."),
+    ]
+
+    for title, subtitle in sections:
+        row = Adw.ActionRow()
+        row.set_title(title)
+        row.set_subtitle(subtitle)
+        usage_group.add(row)
+
+    dialog.present(win)
