@@ -7,7 +7,7 @@ from pathlib import Path
 import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, GLib, GObject, Gtk, Gio
+from gi.repository import Adw, GLib, Gtk, Gio
 
 from lsmm.core.updater import check_for_update
 from lsmm.core.config import (
@@ -42,6 +42,17 @@ def _list_store_from_filter(f: Gtk.FileFilter) -> Gio.ListStore:
     return store
 
 
+class _TabRef:
+    """Adapter replacing Gtk.Popover in rebuild_profiles_popover for the Profiles tab.
+    popdown() triggers a tab content refresh instead of dismissing a popover."""
+
+    def __init__(self, refresh_fn):
+        self._refresh = refresh_fn
+
+    def popdown(self):
+        self._refresh()
+
+
 # ── Main window ───────────────────────────────────────────────────────────────
 
 class ModManagerWindow(Adw.ApplicationWindow):
@@ -70,16 +81,13 @@ class ModManagerWindow(Adw.ApplicationWindow):
         root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self.toast_overlay.set_child(root)
 
+        # ── Header bar ────────────────────────────────────────────────────────
         header = Adw.HeaderBar()
         root.append(header)
 
         check_btn = Gtk.Button(label="Check")
         check_btn.connect("clicked", self._on_check)
         header.pack_end(check_btn)
-
-        self.setup_btn = Gtk.Button(label="Setup SE")
-        self.setup_btn.connect("clicked", self._on_setup_btn)
-        header.pack_end(self.setup_btn)
 
         self.launch_btn = Gtk.Button(label="▶ Launch")
         self.launch_btn.add_css_class("suggested-action")
@@ -88,56 +96,78 @@ class ModManagerWindow(Adw.ApplicationWindow):
         self.launch_btn.connect("clicked", self._on_launch_game)
         header.pack_end(self.launch_btn)
 
-        help_btn = Gtk.Button()
-        help_btn.set_icon_name("help-about-symbolic")
-        help_btn.set_tooltip_text("Help")
-        help_btn.connect("clicked", lambda _: show_help_dialog(self))
-        header.pack_start(help_btn)
-
-        settings_btn = Gtk.Button()
-        settings_btn.set_icon_name("preferences-system-symbolic")
-        settings_btn.set_tooltip_text("Settings")
-        settings_btn.connect("clicked", lambda _: show_settings_dialog(self))
-        header.pack_end(settings_btn)
-
-        self._sidebar_btn = Gtk.ToggleButton()
-        self._sidebar_btn.set_icon_name("sidebar-show-symbolic")
-        self._sidebar_btn.set_tooltip_text("Toggle game list (F9)")
-        self._sidebar_btn.set_active(True)
-        header.pack_start(self._sidebar_btn)
-
-        toggle_action = Gio.SimpleAction.new("toggle-sidebar", None)
-        toggle_action.connect(
-            "activate",
-            lambda a, p: self._sidebar_btn.set_active(not self._sidebar_btn.get_active()),
-        )
-        self.add_action(toggle_action)
-        self.get_application().set_accels_for_action("win.toggle-sidebar", ["F9"])
-
         settings_action = Gio.SimpleAction.new("open-settings", None)
         settings_action.connect("activate", lambda a, p: show_settings_dialog(self))
         self.add_action(settings_action)
         self.get_application().set_accels_for_action("win.open-settings", ["<Ctrl>comma"])
 
-        self._profiles_popover_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        self._profiles_popover_box.set_margin_start(12)
-        self._profiles_popover_box.set_margin_end(12)
-        self._profiles_popover_box.set_margin_top(10)
-        self._profiles_popover_box.set_margin_bottom(10)
-        self._profiles_popover_box.set_size_request(280, -1)
+        # ── Body: nav rail + separator + content ──────────────────────────────
+        body = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        body.set_vexpand(True)
+        root.append(body)
 
-        profiles_popover = Gtk.Popover()
-        profiles_popover.set_autohide(True)
-        profiles_popover.set_child(self._profiles_popover_box)
-        profiles_popover.connect("show", lambda p: rebuild_profiles_popover(self, p))
+        # ── Nav rail (72px) ───────────────────────────────────────────────────
+        nav_rail = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        nav_rail.set_size_request(72, -1)
+        nav_rail.add_css_class("navigation-sidebar")
+        body.append(nav_rail)
 
-        profiles_menu_btn = Gtk.MenuButton(label="Profiles/Modpacks")
-        profiles_menu_btn.set_tooltip_text("Save and load mod profiles")
-        profiles_menu_btn.set_popover(profiles_popover)
-        header.pack_start(profiles_menu_btn)
+        # Games flyout
+        games_popover = Gtk.Popover()
+        games_popover.set_position(Gtk.PositionType.RIGHT)
+        games_panel = build_games_panel(self)
+        games_panel.set_size_request(260, 480)
+        games_popover.set_child(games_panel)
+        self.games_list.connect("row-activated", lambda lb, row: games_popover.popdown())
+
+        games_btn = Gtk.MenuButton()
+        games_btn.set_popover(games_popover)
+        games_btn.set_size_request(-1, 64)
+        games_btn.set_direction(Gtk.ArrowType.NONE)
+        games_btn.set_tooltip_text("Choose game")
+        games_inner = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        games_inner.set_valign(Gtk.Align.CENTER)
+        games_inner.append(Gtk.Image.new_from_icon_name("input-gaming-symbolic"))
+        games_lbl = Gtk.Label(label="Games")
+        games_lbl.add_css_class("caption")
+        games_inner.append(games_lbl)
+        games_btn.set_child(games_inner)
+        nav_rail.append(games_btn)
+
+        spacer = Gtk.Box()
+        spacer.set_vexpand(True)
+        nav_rail.append(spacer)
+
+        settings_btn = Gtk.Button()
+        settings_btn.set_icon_name("preferences-system-symbolic")
+        settings_btn.set_tooltip_text("Settings")
+        settings_btn.set_size_request(-1, 64)
+        settings_btn.connect("clicked", lambda _: show_settings_dialog(self))
+        nav_rail.append(settings_btn)
+
+        help_btn = Gtk.Button()
+        help_btn.set_icon_name("help-about-symbolic")
+        help_btn.set_tooltip_text("Help")
+        help_btn.set_size_request(-1, 64)
+        help_btn.connect("clicked", lambda _: show_help_dialog(self))
+        nav_rail.append(help_btn)
+
+        # ── Separator ─────────────────────────────────────────────────────────
+        body.append(Gtk.Separator(orientation=Gtk.Orientation.VERTICAL))
+
+        # ── Content area ──────────────────────────────────────────────────────
+        content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        content.set_hexpand(True)
+        body.append(content)
 
         self._view_stack = Adw.ViewStack()
         self._view_stack.set_vexpand(True)
+        self._view_stack.add_titled_with_icon(
+            self._build_profiles_tab(), "profiles", "Profiles", "contact-new-symbolic"
+        )
+        self._view_stack.add_titled_with_icon(
+            self._build_mod_engine_tab(), "mod-engine", "Mod Engine", "application-x-executable-symbolic"
+        )
         self._view_stack.add_titled_with_icon(
             self._build_mods_panel(), "mods", "Mods", "package-x-generic-symbolic"
         )
@@ -146,24 +176,14 @@ class ModManagerWindow(Adw.ApplicationWindow):
             self.load_order_panel, "load-order", "Load Order", "view-sort-descending-symbolic"
         )
         self._lo_page.set_visible(False)
-
-        split_view = Adw.OverlaySplitView()
-        split_view.set_vexpand(True)
-        split_view.set_sidebar(build_games_panel(self))
-        split_view.set_content(self._view_stack)
-        split_view.set_sidebar_position(Gtk.PackType.START)
-        root.append(split_view)
-
-        self._sidebar_btn.bind_property(
-            "active", split_view, "show-sidebar",
-            GObject.BindingFlags.BIDIRECTIONAL | GObject.BindingFlags.SYNC_CREATE,
-        )
+        content.append(self._view_stack)
 
         self._view_switcher_bar = Adw.ViewSwitcherBar()
         self._view_switcher_bar.set_stack(self._view_stack)
-        self._view_switcher_bar.set_reveal(False)
-        root.append(self._view_switcher_bar)
+        self._view_switcher_bar.set_reveal(True)
+        content.append(self._view_switcher_bar)
 
+        # ── Status bar ────────────────────────────────────────────────────────
         status_bar = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
 
         self.status_label = Gtk.Label(label="Ready")
@@ -181,8 +201,124 @@ class ModManagerWindow(Adw.ApplicationWindow):
         self.progress_bar.set_visible(False)
         status_bar.append(self.progress_bar)
 
-        root.append(status_bar)
+        content.append(status_bar)
         self._pulse_source_id: int | None = None
+
+        # Populate profiles tab initial state
+        self._refresh_profiles_tab()
+
+    # ── Profiles tab ──────────────────────────────────────────────────────────
+
+    def _build_profiles_tab(self) -> Gtk.Widget:
+        scroll = Gtk.ScrolledWindow()
+        scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+
+        self._profiles_popover_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        self._profiles_popover_box.set_margin_start(12)
+        self._profiles_popover_box.set_margin_end(12)
+        self._profiles_popover_box.set_margin_top(10)
+        self._profiles_popover_box.set_margin_bottom(10)
+        scroll.set_child(self._profiles_popover_box)
+        return scroll
+
+    def _refresh_profiles_tab(self):
+        rebuild_profiles_popover(self, _TabRef(self._refresh_profiles_tab))
+
+    # ── Mod Engine tab ────────────────────────────────────────────────────────
+
+    def _build_mod_engine_tab(self) -> Gtk.Widget:
+        outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+
+        self._mod_engine_placeholder = Adw.StatusPage()
+        self._mod_engine_placeholder.set_icon_name("application-x-executable-symbolic")
+        self._mod_engine_placeholder.set_title("No game selected")
+        self._mod_engine_placeholder.set_description("Select a game from the Games menu")
+        outer.append(self._mod_engine_placeholder)
+
+        self._mod_engine_content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        self._mod_engine_content.set_margin_start(16)
+        self._mod_engine_content.set_margin_end(16)
+        self._mod_engine_content.set_margin_top(16)
+        self._mod_engine_content.set_margin_bottom(16)
+        self._mod_engine_content.set_visible(False)
+
+        self._engine_name_label = Gtk.Label()
+        self._engine_name_label.add_css_class("heading")
+        self._engine_name_label.set_xalign(0)
+        self._mod_engine_content.append(self._engine_name_label)
+
+        self._se_status_label = Gtk.Label()
+        self._se_status_label.add_css_class("dim-label")
+        self._se_status_label.set_xalign(0)
+        self._mod_engine_content.append(self._se_status_label)
+
+        self.setup_btn = Gtk.Button()
+        self.setup_btn.connect("clicked", self._on_setup_btn)
+        self._mod_engine_content.append(self.setup_btn)
+
+        self._ensure_ini_btn = Gtk.Button(label="Ensure INI Settings")
+        self._ensure_ini_btn.set_tooltip_text("Add bInvalidateOlderFiles=1 to the game's Custom INI")
+        self._ensure_ini_btn.connect("clicked", self._on_ensure_ini)
+        self._ensure_ini_btn.set_visible(False)
+        self._mod_engine_content.append(self._ensure_ini_btn)
+
+        verify_btn = Gtk.Button(label="Verify Paths")
+        verify_btn.set_tooltip_text("Check that game and script extender paths exist")
+        verify_btn.connect("clicked", self._on_verify_paths_btn)
+        self._mod_engine_content.append(verify_btn)
+
+        outer.append(self._mod_engine_content)
+        return outer
+
+    def _get_engine_display(self) -> tuple[str, str]:
+        """Return (framework_name, status_text) for the Mod Engine tab."""
+        if getattr(self.engine, "has_framework_setup", False):
+            fw = getattr(self.engine, "framework_name", "BepInEx")
+            installed = self.engine.is_framework_installed()
+            return fw, "✓ Installed" if installed else "Not installed"
+        se = self.engine.profile.get("script_extender")
+        if se:
+            paths = getattr(self.engine, "paths", None)
+            se_installed = bool(paths and paths.se_loader and paths.se_loader.exists())
+            return se.get("name", "Script Extender"), "✓ Installed" if se_installed else "Not installed"
+        return "No script extender", ""
+
+    def _refresh_mod_engine_tab(self):
+        if not self.engine:
+            self._mod_engine_placeholder.set_visible(True)
+            self._mod_engine_content.set_visible(False)
+            return
+
+        self._mod_engine_placeholder.set_visible(False)
+        self._mod_engine_content.set_visible(True)
+        name, status = self._get_engine_display()
+        self._engine_name_label.set_text(name)
+        self._se_status_label.set_text(status)
+        self._ensure_ini_btn.set_visible(hasattr(self.engine, "ensure_ini"))
+        self._update_setup_btn()
+
+    def _on_ensure_ini(self, _btn):
+        if not self.engine or not hasattr(self.engine, "ensure_ini"):
+            return
+        try:
+            self.engine.ensure_ini()
+            self._toast("✓ INI settings applied")
+        except Exception as e:
+            self._toast(f"INI update failed: {e}")
+
+    def _show_verify_warnings(self, warnings: list[str]) -> None:
+        if warnings:
+            self._toast(f"⚠ {warnings[0]}" + (f" (+{len(warnings)-1} more)" if len(warnings) > 1 else ""))
+        else:
+            self._toast("✓ All paths verified")
+
+    def _on_verify_paths_btn(self, _btn):
+        if not self.engine:
+            return
+        if hasattr(self.engine, "paths"):
+            self._show_verify_warnings(self.engine.paths.verify())
+        else:
+            self._toast("Verify not supported for this engine")
 
     # ── Progress bar helpers ──────────────────────────────────────────────────
 
@@ -237,9 +373,10 @@ class ModManagerWindow(Adw.ApplicationWindow):
         self._update_load_order_panel()
         self._refresh_mods()
         self._refresh_load_order()
-        self._update_setup_btn()
         self._update_action_sensitivity()
         self.launch_btn.set_sensitive(bool(self.engine.profile.get("steam_app_id")))
+        self._refresh_mod_engine_tab()
+        GLib.idle_add(self._refresh_profiles_tab)
 
         paths = getattr(self.engine, "paths", None)
         if paths and hasattr(paths, "proton_prefix") and not paths.proton_prefix.exists():
@@ -253,10 +390,8 @@ class ModManagerWindow(Adw.ApplicationWindow):
         self._refresh_games()
         self.games_list.grab_focus()
         if get_steam_root() is None and get_nexus_api_key() is None:
-            # Truly first run — walk the user through full setup.
             show_first_run_wizard(self)
         elif get_steam_root() is None:
-            # Returning user with API key already set, but Steam root missing.
             show_steam_path_dialog(self, get_steam_candidates())
         if self._pending_nxm:
             nxm_url = self._pending_nxm
@@ -266,7 +401,6 @@ class ModManagerWindow(Adw.ApplicationWindow):
     def _update_load_order_panel(self):
         has_lo = self.engine.has_load_order
         self._lo_page.set_visible(has_lo)
-        self._view_switcher_bar.set_reveal(has_lo)
 
     # ── Mods panel ────────────────────────────────────────────────────────────
 
@@ -580,8 +714,7 @@ class ModManagerWindow(Adw.ApplicationWindow):
     # ── Profiles ──────────────────────────────────────────────────────────────
 
     def _get_installed_nexus_mod_ids(self, game_slug: str) -> set:
-        """Return set of nexus mod_ids installed for this game.
-        Combines lsmm manifest entries with engine filesystem scan (e.g. SMAPI UpdateKeys)."""
+        """Return set of nexus mod_ids installed for this game."""
         from lsmm.core.installer import load_manifest
         manifest = load_manifest()
         ids: set = set()
@@ -606,16 +739,11 @@ class ModManagerWindow(Adw.ApplicationWindow):
             self._toast("Select a game first")
             return
         if hasattr(self.engine, "verify"):
-            warnings = self.engine.verify()
+            self._show_verify_warnings(self.engine.verify())
         elif hasattr(self.engine, "paths"):
-            warnings = self.engine.paths.verify()
+            self._show_verify_warnings(self.engine.paths.verify())
         else:
             self._toast("Check not supported for this engine")
-            return
-        if warnings:
-            self._toast(f"⚠ {warnings[0]}" + (f" (+{len(warnings)-1} more)" if len(warnings) > 1 else ""))
-        else:
-            self._toast("✓ All paths verified")
 
     def _update_setup_btn(self):
         if not self.engine:
