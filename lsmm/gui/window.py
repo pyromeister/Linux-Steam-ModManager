@@ -195,9 +195,15 @@ class ModManagerWindow(Adw.ApplicationWindow):
         game_view = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self._view_stack = Adw.ViewStack()
         self._view_stack.set_vexpand(True)
-        self._view_stack.add_titled(self._build_profiles_tab(), "profiles", "Profiles").set_icon_name("system-users-symbolic")
-        self._view_stack.add_titled(self._build_mod_engine_tab(), "mod-engine", "Mod Engine").set_icon_name("preferences-system-symbolic")
-        self._view_stack.add_titled(self._build_mods_panel(), "mods", "Mods").set_icon_name("package-x-generic-symbolic")
+        self._view_stack.add_titled(
+            self._build_profiles_tab(), "profiles", "Profiles"
+        ).set_icon_name("system-users-symbolic")
+        self._view_stack.add_titled(
+            self._build_mod_engine_tab(), "mod-engine", "Mod Engine"
+        ).set_icon_name("preferences-system-symbolic")
+        self._view_stack.add_titled(
+            self._build_mods_panel(), "mods", "Mods"
+        ).set_icon_name("package-x-generic-symbolic")
         self.load_order_panel = build_load_order_panel(self)
         self._lo_page = self._view_stack.add_titled(self.load_order_panel, "load-order", "Load Order")
         self._lo_page.set_icon_name("view-list-ordered-symbolic")
@@ -330,7 +336,7 @@ class ModManagerWindow(Adw.ApplicationWindow):
         for name, data in all_profiles.items():
             self._profiles_list.append(self._make_profile_row(name, data, active_name, slug, mods_overview))
 
-    def _make_profile_row(self, name: str, data: dict, active_name: str | None, slug: str, mods_overview: tuple | None = None):
+    def _make_profile_row(self, name, data, active_name, slug, mods_overview=None):
         row = Adw.ActionRow()
         row.set_title(name)
         if data.get("collection_mods") and mods_overview:

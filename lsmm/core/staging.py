@@ -15,10 +15,6 @@ from lsmm.core.installer import detect_source_root, extract
 STAGING_ROOT = Path.home() / ".local/share/lsmm/staging"
 
 
-def get_staging_dir(game_slug: str) -> Path:
-    return STAGING_ROOT / game_slug
-
-
 def get_mod_staging_dir(game_slug: str, mod_name: str) -> Path:
     return STAGING_ROOT / game_slug / mod_name
 
@@ -51,11 +47,6 @@ def stage_mod(
     return rel_paths
 
 
-def is_staged(game_slug: str, mod_name: str) -> bool:
-    staging_dir = get_mod_staging_dir(game_slug, mod_name)
-    if not staging_dir.exists():
-        return False
-    return any(staging_dir.rglob("*"))
 
 
 def staged_files(game_slug: str, mod_name: str) -> list[Path]:

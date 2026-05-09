@@ -116,17 +116,6 @@ def build_help_panel(win) -> Gtk.ScrolledWindow:
     return scroll
 
 
-def show_help_dialog(win):
-    dialog = Adw.PreferencesDialog()
-    dialog.set_title("Help & About")
-    page = Adw.PreferencesPage()
-    page.set_title("Linux Steam ModManager")
-    page.set_icon_name("help-about-symbolic")
-    dialog.add(page)
-    _populate_help_page(page, win)
-    dialog.present(win)
-
-
 def _populate_help_page(page, win):
     about_group = Adw.PreferencesGroup()
     about_group.set_title("About")

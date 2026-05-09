@@ -47,6 +47,8 @@ def _parse_smapi_manifest(path: Path) -> dict | None:
         except (UnicodeDecodeError, json.JSONDecodeError):
             continue
     return None
+
+
 GITHUB_API = "https://api.github.com/repos"
 
 logger = logging.getLogger(__name__)

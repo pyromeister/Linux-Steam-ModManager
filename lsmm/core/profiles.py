@@ -70,9 +70,6 @@ def get(game_slug: str, name: str) -> dict | None:
     return load_all(game_slug).get(name)
 
 
-def get_collection_mods(game_slug: str, name: str) -> list[dict]:
-    return load_all(game_slug).get(name, {}).get("collection_mods", [])
-
 
 # ── Active profile tracking ───────────────────────────────────────────────────
 

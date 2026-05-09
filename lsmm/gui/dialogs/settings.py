@@ -19,15 +19,6 @@ def build_settings_panel(window) -> Adw.PreferencesPage:
     return page
 
 
-def show_settings_dialog(window):
-    dialog = Adw.PreferencesDialog()
-    dialog.set_title("Settings")
-    page = Adw.PreferencesPage()
-    page.set_title("General")
-    page.set_icon_name("preferences-system-symbolic")
-    dialog.add(page)
-    _populate_settings_page(page, window, dialog=dialog)
-    dialog.present(window)
 
 
 def _populate_settings_page(page, window, dialog=None):
