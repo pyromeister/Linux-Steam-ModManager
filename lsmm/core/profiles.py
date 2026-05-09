@@ -70,7 +70,6 @@ def get(game_slug: str, name: str) -> dict | None:
     return load_all(game_slug).get(name)
 
 
-
 # ── Active profile tracking ───────────────────────────────────────────────────
 
 def set_active(game_slug: str, name: str | None) -> None:

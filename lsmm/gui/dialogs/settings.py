@@ -19,8 +19,6 @@ def build_settings_panel(window) -> Adw.PreferencesPage:
     return page
 
 
-
-
 def _populate_settings_page(page, window, dialog=None):
     # ── App ───────────────────────────────────────────────────────────────────
     app_group = Adw.PreferencesGroup()

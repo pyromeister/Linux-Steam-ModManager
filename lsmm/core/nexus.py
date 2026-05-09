@@ -42,6 +42,13 @@ def check_nxm_expiry(nxm: dict) -> None:
         raise NxmExpiredError("NXM link has expired")
 
 
+def md5_file(path: Path) -> str:
+    h = hashlib.md5()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
 
 NEXUS_API_BASE = "https://api.nexusmods.com/v1"
 
@@ -136,6 +143,14 @@ def check_update(game_domain: str, mod_id: int, current_file_id: int, api_key: s
         return newest
     return None
 
+
+def fetch_collection(slug: str, api_key: str) -> dict | None:
+    """Fetch collection metadata from Nexus API. Returns None on any failure."""
+    endpoint = f"{NEXUS_API_BASE}/collections/{slug}.json"
+    try:
+        return json.loads(net.request(endpoint, headers=_api_headers(api_key)))
+    except Exception:
+        return None
 
 
 def fetch_collection_graphql(slug: str, api_key: str) -> dict | None:
