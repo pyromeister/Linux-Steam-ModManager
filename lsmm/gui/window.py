@@ -161,8 +161,16 @@ class ModManagerWindow(Adw.ApplicationWindow):
         # Build games panel before overlay setup (sets win.games_list etc.)
         games_panel = build_games_panel(self)
         games_panel.set_size_request(220, -1)
-        games_panel.add_css_class("card")
+        games_panel.add_css_class("games-flyout-panel")
         self.games_list.connect("row-activated", lambda lb, row: self._close_games_flyout())
+
+        self._flyout_backdrop = Gtk.Button()
+        self._flyout_backdrop.add_css_class("flat")
+        self._flyout_backdrop.set_hexpand(True)
+        self._flyout_backdrop.set_vexpand(True)
+        self._flyout_backdrop.set_visible(False)
+        self._flyout_backdrop.connect("clicked", lambda _: self._close_games_flyout())
+        content_overlay.add_overlay(self._flyout_backdrop)
 
         self._flyout_revealer = Gtk.Revealer()
         self._flyout_revealer.set_transition_type(Gtk.RevealerTransitionType.SLIDE_RIGHT)
@@ -171,20 +179,7 @@ class ModManagerWindow(Adw.ApplicationWindow):
         self._flyout_revealer.set_valign(Gtk.Align.FILL)
         self._flyout_revealer.set_child(games_panel)
         self._flyout_revealer.set_reveal_child(False)
-
-        self._flyout_backdrop = Gtk.Button()
-        self._flyout_backdrop.add_css_class("flat")
-        self._flyout_backdrop.set_hexpand(True)
-        self._flyout_backdrop.set_vexpand(True)
-        self._flyout_backdrop.set_visible(False)
-        self._flyout_backdrop.connect("clicked", lambda _: self._close_games_flyout())
-
-        flyout_layer = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
-        flyout_layer.set_halign(Gtk.Align.FILL)
-        flyout_layer.set_valign(Gtk.Align.FILL)
-        flyout_layer.append(self._flyout_revealer)
-        flyout_layer.append(self._flyout_backdrop)
-        content_overlay.add_overlay(flyout_layer)
+        content_overlay.add_overlay(self._flyout_revealer)
 
         content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         content_overlay.set_child(content)
@@ -200,12 +195,14 @@ class ModManagerWindow(Adw.ApplicationWindow):
         game_view = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self._view_stack = Adw.ViewStack()
         self._view_stack.set_vexpand(True)
-        self._view_stack.add_titled(self._build_profiles_tab(), "profiles", "Profiles")
-        self._view_stack.add_titled(self._build_mod_engine_tab(), "mod-engine", "Mod Engine")
-        self._view_stack.add_titled(self._build_mods_panel(), "mods", "Mods")
+        self._view_stack.add_titled(self._build_profiles_tab(), "profiles", "Profiles").set_icon_name("system-users-symbolic")
+        self._view_stack.add_titled(self._build_mod_engine_tab(), "mod-engine", "Mod Engine").set_icon_name("preferences-system-symbolic")
+        self._view_stack.add_titled(self._build_mods_panel(), "mods", "Mods").set_icon_name("package-x-generic-symbolic")
         self.load_order_panel = build_load_order_panel(self)
         self._lo_page = self._view_stack.add_titled(self.load_order_panel, "load-order", "Load Order")
+        self._lo_page.set_icon_name("view-list-ordered-symbolic")
         self._lo_page.set_visible(False)
+        self._view_stack.connect("notify::visible-child", self._on_tab_switched)
         view_switcher = Adw.ViewSwitcher()
         view_switcher.set_stack(self._view_stack)
         view_switcher.set_policy(Adw.ViewSwitcherPolicy.WIDE)
@@ -325,14 +322,23 @@ class ModManagerWindow(Adw.ApplicationWindow):
         active_name = _prof.get_active(slug)
         self._profiles_active_label.set_text(f"Active: {active_name}" if active_name else "")
 
-        for name, data in all_profiles.items():
-            self._profiles_list.append(self._make_profile_row(name, data, active_name, slug))
+        mods_overview = None
+        if self.engine and any(d.get("collection_mods") for d in all_profiles.values()):
+            mods = self.engine.list_mods()
+            mods_overview = (sum(1 for m in mods if m["active"]), len(mods))
 
-    def _make_profile_row(self, name: str, data: dict, active_name: str | None, slug: str):
+        for name, data in all_profiles.items():
+            self._profiles_list.append(self._make_profile_row(name, data, active_name, slug, mods_overview))
+
+    def _make_profile_row(self, name: str, data: dict, active_name: str | None, slug: str, mods_overview: tuple | None = None):
         row = Adw.ActionRow()
         row.set_title(name)
-        mod_count = len(data.get("active_mods", []))
-        row.set_subtitle(f"{mod_count} mod{'s' if mod_count != 1 else ''}")
+        if data.get("collection_mods") and mods_overview:
+            n_active, total = mods_overview
+            row.set_subtitle(f"{n_active} / {total} active")
+        else:
+            mod_count = len(data.get("active_mods", []))
+            row.set_subtitle(f"{mod_count} mod{'s' if mod_count != 1 else ''}")
 
         if name == active_name:
             check = Gtk.Image.new_from_icon_name("emblem-default-symbolic")
@@ -547,6 +553,9 @@ class ModManagerWindow(Adw.ApplicationWindow):
         self._path_game_root_row = _make_path_row("Game root")
         self._paths_group.add(self._path_game_root_row)
 
+        self._path_mods_dir_row = _make_path_row("Mods dir")
+        self._paths_group.add(self._path_mods_dir_row)
+
         self._path_data_dir_row = _make_path_row("Data dir")
         self._paths_group.add(self._path_data_dir_row)
 
@@ -578,18 +587,47 @@ class ModManagerWindow(Adw.ApplicationWindow):
         se = getattr(paths, "script_extender", None) if paths else None
         game_root = getattr(paths, "game_root", None)
         if getattr(self.engine, "has_framework_setup", False):
+            from lsmm.core.installer import load_manifest
             fw = getattr(self.engine, "framework_name", "BepInEx")
             self._engine_sub_label.set_text(f"{game_name} · {fw}")
             self._se_group.set_title(fw)
             installed = self.engine.is_framework_installed()
-            self._se_version_row.set_subtitle("✓ Installed" if installed else "Not installed")
-            self._set_row(self._se_loader_row, "", False)
+            ver = load_manifest().get(fw, {}).get("nexus", {}).get("version") or ""
+            self._se_version_row.set_title("Version")
+            self._se_version_row.set_subtitle(
+                (f"✓  {ver}" if ver else "✓  Installed") if installed else "Not installed"
+            )
+            fw_cfg = (self.engine.profile.get("smapi")
+                      or self.engine.profile.get("bepinex")
+                      or {})
+            exe_name = fw_cfg.get("executable", fw)
+            exe_path = (self.engine.game_root / exe_name) if exe_name else None
+            self._se_loader_row.set_title("Executable")
+            if exe_path:
+                self._set_row(
+                    self._se_loader_row,
+                    self._abbrev_path(exe_path) + ("  ✓" if exe_path.exists() else "  ✗ Not found"),
+                )
+            else:
+                self._set_row(self._se_loader_row, "", False)
+            launch_name = fw_cfg.get("launch_script")
+            launch_path = (self.engine.game_root / launch_name) if launch_name else None
+            self._se_launch_row.set_title("Launch script")
+            if launch_path and launch_path != exe_path:
+                self._set_row(
+                    self._se_launch_row,
+                    self._abbrev_path(launch_path) + ("  ✓" if launch_path.exists() else "  ✗ Not found"),
+                )
+            else:
+                self._set_row(self._se_launch_row, "", False)
             self._set_row(self._se_plugins_dir_row, "", False)
-            self._set_row(self._se_launch_row, "", False)
         elif se:
             se_name = se.get("name", "Script Extender")
             self._engine_sub_label.set_text(f"{game_name} · {se_name}")
             self._se_group.set_title(se_name)
+            self._se_version_row.set_title("Version")
+            self._se_loader_row.set_title("Loader")
+            self._se_launch_row.set_title("Steam launch")
             se_loader = getattr(paths, "se_loader", None)
             se_installed = bool(se_loader and se_loader.exists())
             self._se_version_row.set_subtitle("✓ Installed" if se_installed else "✗ Not installed")
@@ -629,16 +667,27 @@ class ModManagerWindow(Adw.ApplicationWindow):
                 self._path_game_root_row.set_subtitle(
                     self._abbrev_path(game_root) + ("  ✓" if exists else "  ✗ Not found")
                 )
+            self._path_game_root_row.set_visible(bool(game_root))
+            mods_dir = getattr(paths, "mods_dir", None) or getattr(self.engine, "mods_dir", None)
+            if mods_dir:
+                exists = mods_dir.exists()
+                self._path_mods_dir_row.set_subtitle(
+                    self._abbrev_path(mods_dir)
+                    + ("  ✓" if exists else "  — created on first install")
+                )
+            self._path_mods_dir_row.set_visible(bool(mods_dir))
             if data_dir:
                 exists = data_dir.exists()
                 self._path_data_dir_row.set_subtitle(
                     self._abbrev_path(data_dir) + ("  ✓" if exists else "  ✗ Not found")
                 )
+            self._path_data_dir_row.set_visible(bool(data_dir))
             if proton:
                 exists = proton.exists()
                 self._path_proton_row.set_subtitle(
                     self._abbrev_path(proton) + ("  ✓" if exists else "  — launch game once to create")
                 )
+            self._path_proton_row.set_visible(bool(proton))
             if plugins_txt:
                 self._path_plugins_txt_row.set_subtitle(self._abbrev_path(plugins_txt))
                 self._path_plugins_txt_row.set_visible(True)
@@ -705,9 +754,13 @@ class ModManagerWindow(Adw.ApplicationWindow):
             paths_grp.add(row)
             entries[key] = row
 
-        _add_entry("Game root", "game_root", paths.game_root)
-        _add_entry("Data dir", "data_dir", paths.data_dir)
-        _add_entry("Proton prefix", "proton_prefix", paths.proton_prefix)
+        _add_entry("Game root", "game_root", getattr(paths, "game_root", None))
+        data_dir = getattr(paths, "data_dir", None)
+        if data_dir is not None:
+            _add_entry("Data dir", "data_dir", data_dir)
+        proton = getattr(paths, "proton_prefix", None)
+        if proton is not None:
+            _add_entry("Proton prefix", "proton_prefix", proton)
         se = getattr(paths, "script_extender", None)
         if se:
             _add_entry("SE Loader", "se_loader", getattr(paths, "se_loader", None))
@@ -741,6 +794,10 @@ class ModManagerWindow(Adw.ApplicationWindow):
             except Exception:
                 pass
             self._refresh_mod_engine_tab()
+            self._refresh_mods()
+            self._update_action_sensitivity()
+            self._update_setup_btn()
+            GLib.idle_add(self._refresh_profiles_tab)
             dialog.close()
             self._toast("Path overrides saved")
 
@@ -941,6 +998,19 @@ class ModManagerWindow(Adw.ApplicationWindow):
 
         panel.append(btn_box)
         return panel
+
+    def _on_tab_switched(self, stack, _param):
+        if not self.engine:
+            return
+        name = stack.get_visible_child_name()
+        if name == "profiles":
+            self._refresh_profiles_tab()
+        elif name == "mod-engine":
+            self._refresh_mod_engine_tab()
+        elif name == "mods":
+            self._refresh_mods()
+        elif name == "load-order":
+            self._refresh_load_order()
 
     # ── Mod list ──────────────────────────────────────────────────────────────
 

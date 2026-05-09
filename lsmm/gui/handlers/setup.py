@@ -64,7 +64,8 @@ def show_bepinex_launch_dialog(win):
             "<b>Steam Launch Option</b> "
             "(right-click game → Properties → General):\n\n"
             f"<tt>{GLib.markup_escape_text(launch_option)}</tt>"
-            f"{clipboard_note}"
+            f"{clipboard_note}\n\n"
+            "Or use the <b>▶ Launch</b> button in this app to launch directly."
         ),
     )
     dialog.set_body_use_markup(True)
@@ -216,7 +217,8 @@ def _finish_se_setup(win):
             "A launch script was created. Add the following to your game's "
             "<b>Steam Launch Options</b> (right-click game → Properties → General):\n\n"
             f"<tt>{GLib.markup_escape_text(launch_option)}</tt>"
-            f"{clipboard_note}"
+            f"{clipboard_note}\n\n"
+            "Or use the <b>▶ Launch</b> button in this app to launch directly."
         ),
     )
     dialog.set_body_use_markup(True)

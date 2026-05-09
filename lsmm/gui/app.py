@@ -4,6 +4,7 @@ Entry point: ModManagerApp wraps ModManagerWindow.
 """
 
 import logging
+import signal
 import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -67,6 +68,7 @@ class ModManagerApp(Adw.Application):
             self._window = ModManagerWindow(app, pending_nxm=self._pending_nxm_for_activate)
             self._pending_nxm_for_activate = None
             self._window.set_icon_name("lsmm")
+            self._window.connect("close-request", lambda _: self.quit() or True)
         self._window.present()
 
     def _on_command_line(self, app, command_line):
@@ -87,4 +89,5 @@ def main():
     _setup_logging()
     _install_log_filter()
     app = ModManagerApp()
-    app.run(sys.argv)
+    GLib.unix_signal_add(GLib.PRIORITY_HIGH, signal.SIGINT, app.quit)
+    sys.exit(app.run(sys.argv))

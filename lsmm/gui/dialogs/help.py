@@ -103,7 +103,7 @@ def build_help_panel(win) -> Gtk.ScrolledWindow:
          "Paste an nxm:// link from the Nexus Mods website. "
          "Requires a free API key (nexusmods.com → Account → API Keys)."),
         ("Custom game profiles",
-         "Drop a <game>.json file into ~/.config/linux-mod-manager/games/ "
+         "Drop a &lt;game&gt;.json file into ~/.config/linux-mod-manager/games/ "
          "to add a game or override a bundled profile."),
     ]:
         row = Adw.ActionRow()

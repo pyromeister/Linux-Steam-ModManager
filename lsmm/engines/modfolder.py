@@ -19,7 +19,7 @@ from pathlib import Path
 
 from lsmm.core import net
 from lsmm.engines.base import BaseEngine
-from lsmm.core.config import find_library_for_app
+from lsmm.core.config import find_library_for_app, get_path_overrides
 from lsmm.core.installer import (
     ConflictError,
     cache_archive,
@@ -34,6 +34,19 @@ from lsmm.core.installer import (
 
 
 USER_AGENT = "linux-mod-manager/1.0"
+
+
+def _parse_smapi_manifest(path: Path) -> dict | None:
+    """Parse a SMAPI manifest.json tolerantly: handles BOM, // comments, trailing commas."""
+    for enc in ("utf-8-sig", "utf-8", "latin-1"):
+        try:
+            raw = path.read_text(encoding=enc, errors="replace")
+            raw = re.sub(r"//[^\n]*", "", raw)
+            raw = re.sub(r",\s*([\}\]])", r"\1", raw)
+            return json.loads(raw)
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            continue
+    return None
 GITHUB_API = "https://api.github.com/repos"
 
 logger = logging.getLogger(__name__)
@@ -162,6 +175,12 @@ class ModFolderEngine(BaseEngine):
         self.game_root = steam_lib / "steamapps/common" / subdir
         mods_rel = profile.get("modfolder", {}).get("mods_dir", "Mods")
         self.mods_dir = self.game_root / mods_rel
+        ov = get_path_overrides(str(app_id))
+        if ov.get("game_root"):
+            self.game_root = Path(ov["game_root"])
+            self.mods_dir = self.game_root / mods_rel
+        if ov.get("mods_dir"):
+            self.mods_dir = Path(ov["mods_dir"])
         self.paths = self  # cmd_check calls engine.paths.verify()
 
     def verify(self) -> list[str]:
@@ -263,6 +282,9 @@ class ModFolderEngine(BaseEngine):
             if entry.get("game") not in (None, game_slug):
                 continue
             files = entry.get("files", [])
+            # Skip entries whose files belong to a different game_root (stale override)
+            if files and not any(Path(f).is_relative_to(self.game_root) for f in files):
+                continue
             active = not any(
                 not Path(f).exists() and Path(str(f) + ".disabled").exists()
                 for f in files
@@ -291,14 +313,9 @@ class ModFolderEngine(BaseEngine):
                 # Skip SMAPI-bundled internal mods (UniqueID starts with "SMAPI.")
                 manifest_path = d / "manifest.json"
                 if manifest_path.exists():
-                    try:
-                        import json as _json
-                        raw = re.sub(r"//[^\n]*", "", manifest_path.read_text(encoding="utf-8"))
-                        uid = _json.loads(raw).get("UniqueID", "")
-                        if uid.startswith("SMAPI."):
-                            continue
-                    except Exception:
-                        pass
+                    parsed = _parse_smapi_manifest(manifest_path)
+                    if parsed and parsed.get("UniqueID", "").startswith("SMAPI."):
+                        continue
                 result.append({
                     "name": base_name,
                     "active": not is_disabled,
@@ -317,16 +334,13 @@ class ModFolderEngine(BaseEngine):
         if not self.mods_dir.exists():
             return ids
         for manifest_path in self.mods_dir.glob("*/manifest.json"):
-            try:
-                raw = manifest_path.read_text(encoding="utf-8", errors="replace")
-                raw = re.sub(r"//[^\n]*", "", raw)  # strip // comments (SMAPI allows them)
-                data = json.loads(raw)
-                for key in data.get("UpdateKeys") or []:
-                    m = re.match(r"Nexus:(\d+)", str(key), re.I)
-                    if m:
-                        ids.add(int(m.group(1)))
-            except Exception:
-                pass
+            data = _parse_smapi_manifest(manifest_path)
+            if not data:
+                continue
+            for key in data.get("UpdateKeys") or []:
+                m = re.match(r"Nexus:(\d+)", str(key), re.I)
+                if m:
+                    ids.add(int(m.group(1)))
         return ids
 
     # ── Activation ────────────────────────────────────────────────────────────

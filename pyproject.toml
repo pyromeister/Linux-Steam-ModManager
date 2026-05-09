@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lsmm"
-version = "0.1.1"
+version = "0.2.0-alpha"
 description = "Native Linux mod manager for Steam games"
 readme = "README.md"
 requires-python = ">=3.10"

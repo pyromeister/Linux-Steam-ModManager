@@ -1,3 +1,9 @@
+/* Games flyout panel — opaque sidebar background so overlay doesn't bleed through */
+.games-flyout-panel {
+    background-color: @sidebar_bg_color;
+    border-right: 1px solid @borders;
+}
+
 /* Visible focus rings for keyboard/gamepad navigation (Steam Deck Game Mode) */
 
 *:focus-visible {
