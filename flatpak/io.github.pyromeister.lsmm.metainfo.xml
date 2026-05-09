@@ -38,6 +38,13 @@
   </provides>
 
   <releases>
+    <release version="0.3.0-alpha" date="2026-05-09">
+      <description>
+        <p>Complete UI overhaul with GTK4/libadwaita redesign. Adds staging directory
+        system, mod profiles, tab-switch refresh, SMAPI tolerant parsing, and
+        app update checker.</p>
+      </description>
+    </release>
     <release version="0.1.1" date="2026-05-07">
       <description>
         <p>Initial Flatpak release. Includes FOMOD installer, LOOT integration,
