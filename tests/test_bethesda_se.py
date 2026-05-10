@@ -73,6 +73,7 @@ def eng(tmp_path, monkeypatch):
         game_root=tmp_path,
         se_loader=tmp_path / "sfse_loader.exe",
     )
+    engine._se_manager._game_root = tmp_path
     return engine
 
 
@@ -92,7 +93,7 @@ def _mock_urlopen(release_data: dict):
 # ── get_se_latest_info ────────────────────────────────────────────────────────
 
 def test_get_se_latest_info_returns_version_url_filename(eng):
-    with patch("lsmm.engines.bethesda.urllib.request.urlopen", return_value=_mock_urlopen(_FAKE_RELEASE)):
+    with patch("lsmm.core.net.request", return_value=json.dumps(_FAKE_RELEASE).encode()):
         result = eng.get_se_latest_info()
     assert result is not None
     version, url, filename = result
@@ -103,7 +104,7 @@ def test_get_se_latest_info_returns_version_url_filename(eng):
 
 def test_get_se_latest_info_returns_none_on_http_error(eng):
     import urllib.error
-    with patch("lsmm.engines.bethesda.urllib.request.urlopen",
+    with patch("lsmm.core.net.request",
                side_effect=urllib.error.HTTPError(None, 404, "Not Found", {}, None)):
         result = eng.get_se_latest_info()
     assert result is None
@@ -113,8 +114,7 @@ def test_get_se_latest_info_returns_none_when_no_matching_asset(eng):
     release_no_match = {"tag_name": "0.2.38", "assets": [
         {"name": "changelog.txt", "browser_download_url": "https://example.com/changelog.txt"},
     ]}
-    with patch("lsmm.engines.bethesda.urllib.request.urlopen",
-               return_value=_mock_urlopen(release_no_match)):
+    with patch("lsmm.core.net.request", return_value=json.dumps(release_no_match).encode()):
         result = eng.get_se_latest_info()
     assert result is None
 
@@ -155,27 +155,17 @@ def _make_download_resp(content: bytes):
 
 
 def test_download_script_extender_extracts_zip(eng, tmp_path):
-    # Build a fake zip in memory
-    buf = BytesIO()
-    with zipfile.ZipFile(buf, "w") as z:
-        z.writestr("sfse_loader.exe", b"fake loader")
-    zip_bytes = buf.getvalue()
-
     release_zip = {
         "tag_name": "0.2.38",
         "assets": [{"name": "sfse_0_2_38.zip", "browser_download_url": "https://example.com/sfse.zip"}],
     }
 
-    call_count = 0
+    def fake_extract(archive_path, dest):
+        (dest / "sfse_loader.exe").write_bytes(b"fake loader")
 
-    def fake_urlopen(req, timeout=None):
-        nonlocal call_count
-        call_count += 1
-        if call_count == 1:
-            return _mock_urlopen(release_zip)
-        return _make_download_resp(zip_bytes)
-
-    with patch("lsmm.engines.bethesda.urllib.request.urlopen", side_effect=fake_urlopen):
+    with patch("lsmm.core.net.request", return_value=json.dumps(release_zip).encode()), \
+         patch("lsmm.core.script_extender.download_file"), \
+         patch("lsmm.core.script_extender.extract", side_effect=fake_extract):
         eng.download_script_extender()
 
     assert (eng.paths.game_root / "sfse_loader.exe").exists()
@@ -187,44 +177,29 @@ def test_download_script_extender_raises_on_7z_failure(eng):
         "assets": [{"name": "sfse_0_2_38.7z", "browser_download_url": "https://example.com/sfse.7z"}],
     }
 
-    call_count = 0
-
-    def fake_urlopen(req, timeout=None):
-        nonlocal call_count
-        call_count += 1
-        if call_count == 1:
-            return _mock_urlopen(release_7z)
-        return _make_download_resp(b"not a real 7z")
-
-    bad_result = MagicMock(returncode=1, stderr=b"bad archive")
-    with patch("lsmm.engines.bethesda.urllib.request.urlopen", side_effect=fake_urlopen), \
-         patch("lsmm.engines.bethesda.subprocess.run", return_value=bad_result):
+    with patch("lsmm.core.net.request", return_value=json.dumps(release_7z).encode()), \
+         patch("lsmm.core.script_extender.download_file"), \
+         patch("lsmm.core.script_extender.extract",
+               side_effect=RuntimeError("7z extraction failed: bad archive")):
         with pytest.raises(RuntimeError, match="7z extraction failed"):
             eng.download_script_extender()
 
 
 def test_download_script_extender_calls_progress(eng, tmp_path):
-    buf = BytesIO()
-    with zipfile.ZipFile(buf, "w") as z:
-        z.writestr("sfse_loader.exe", b"x")
-    zip_bytes = buf.getvalue()
-
     release_zip = {
         "tag_name": "0.2.38",
         "assets": [{"name": "sfse_0.zip", "browser_download_url": "https://x.com/sfse.zip"}],
     }
 
-    call_count = 0
-
-    def fake_urlopen(req, timeout=None):
-        nonlocal call_count
-        call_count += 1
-        if call_count == 1:
-            return _mock_urlopen(release_zip)
-        return _make_download_resp(zip_bytes)
-
     progress_calls = []
-    with patch("lsmm.engines.bethesda.urllib.request.urlopen", side_effect=fake_urlopen):
+
+    def fake_download(url, dest, on_progress=None, **_kw):
+        if on_progress:
+            on_progress(100, 100)
+
+    with patch("lsmm.core.net.request", return_value=json.dumps(release_zip).encode()), \
+         patch("lsmm.core.nexus.download_file", side_effect=fake_download), \
+         patch("lsmm.core.script_extender.extract"):
         eng.download_script_extender(on_progress=lambda d, t: progress_calls.append((d, t)))
 
     assert len(progress_calls) > 0

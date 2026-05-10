@@ -96,6 +96,22 @@ def save_path_overrides(app_id: str, overrides: dict) -> None:
     _save_app_config(config)
 
 
+def get_se_installed_version(game_slug: str) -> str | None:
+    return _load_app_config().get("se_versions", {}).get(game_slug)
+
+
+def save_se_installed_version(game_slug: str, version: str) -> None:
+    config = _load_app_config()
+    config.setdefault("se_versions", {})[game_slug] = version
+    _save_app_config(config)
+
+
+def clear_se_installed_version(game_slug: str) -> None:
+    config = _load_app_config()
+    config.get("se_versions", {}).pop(game_slug, None)
+    _save_app_config(config)
+
+
 def get_nexus_api_key() -> str | None:
     return _load_app_config().get("nexus_api_key")
 

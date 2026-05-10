@@ -68,6 +68,8 @@ class ModManagerWindow(Adw.ApplicationWindow):
         self._installing = False
         self._game_slug = None
         self._pending_nxm: str | None = pending_nxm
+        self._se_version_cache: dict = {}
+        self._se_check_in_flight: set = set()
 
         self._build_ui()
         self._update_setup_btn()
@@ -463,6 +465,20 @@ class ModManagerWindow(Adw.ApplicationWindow):
         row.set_subtitle(text)
         row.set_visible(visible)
 
+    @staticmethod
+    def _set_se_row(row: Adw.ActionRow, val: Gtk.Label, text: str, visible: bool = True) -> None:
+        val.set_text(text)
+        row.set_visible(visible)
+
+    @staticmethod
+    def _apply_version_css(lbl: Gtk.Label, text: str) -> None:
+        for cls in ("success", "warning"):
+            lbl.remove_css_class(cls)
+        if "up to date" in text:
+            lbl.add_css_class("success")
+        elif "available" in text:
+            lbl.add_css_class("warning")
+
     def _build_mod_engine_tab(self) -> Gtk.Widget:
         outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
 
@@ -502,20 +518,25 @@ class ModManagerWindow(Adw.ApplicationWindow):
         self._se_group = Adw.PreferencesGroup()
         self._mod_engine_content.append(self._se_group)
 
-        self._se_version_row = Adw.ActionRow()
-        self._se_version_row.set_title("Version")
+        def _make_se_info_row(title):
+            row = Adw.ActionRow()
+            row.set_title(title)
+            lbl = Gtk.Label()
+            lbl.set_halign(Gtk.Align.END)
+            lbl.add_css_class("dim-label")
+            row.add_suffix(lbl)
+            return row, lbl
+
+        self._se_version_row, self._se_version_val = _make_se_info_row("Version")
         self._se_group.add(self._se_version_row)
 
-        self._se_loader_row = Adw.ActionRow()
-        self._se_loader_row.set_title("Loader")
+        self._se_loader_row, self._se_loader_val = _make_se_info_row("Loader")
         self._se_group.add(self._se_loader_row)
 
-        self._se_plugins_dir_row = Adw.ActionRow()
-        self._se_plugins_dir_row.set_title("Plugins dir")
+        self._se_plugins_dir_row, self._se_plugins_val = _make_se_info_row("Plugins dir")
         self._se_group.add(self._se_plugins_dir_row)
 
-        self._se_launch_row = Adw.ActionRow()
-        self._se_launch_row.set_title("Steam launch")
+        self._se_launch_row, self._se_launch_val = _make_se_info_row("Steam launch")
         self._se_group.add(self._se_launch_row)
 
         # ── Action buttons ────────────────────────────────────────────────────
@@ -529,6 +550,13 @@ class ModManagerWindow(Adw.ApplicationWindow):
         self._ensure_ini_btn.connect("clicked", self._on_ensure_ini)
         self._ensure_ini_btn.set_visible(False)
         btn_row.append(self._ensure_ini_btn)
+
+        self._uninstall_se_btn = Gtk.Button(label="Uninstall SE")
+        self._uninstall_se_btn.set_tooltip_text("Remove script extender files from game directory")
+        self._uninstall_se_btn.add_css_class("destructive-action")
+        self._uninstall_se_btn.connect("clicked", self._on_uninstall_se)
+        self._uninstall_se_btn.set_visible(False)
+        btn_row.append(self._uninstall_se_btn)
 
         verify_btn = Gtk.Button(label="Verify Paths")
         verify_btn.set_tooltip_text("Check that game and script extender paths exist")
@@ -584,6 +612,8 @@ class ModManagerWindow(Adw.ApplicationWindow):
         self._mod_engine_placeholder.set_visible(False)
         self._mod_engine_scroll.set_visible(True)
         self._ensure_ini_btn.set_visible(hasattr(self.engine, "ensure_ini"))
+        _se_loader = getattr(getattr(self.engine, "paths", None), "se_loader", None)
+        self._uninstall_se_btn.set_visible(bool(_se_loader and _se_loader.exists()))
         self._update_setup_btn()
 
         game_name = next((n for s, n in self.games if s == self._game_slug), self._game_slug or "")
@@ -600,9 +630,9 @@ class ModManagerWindow(Adw.ApplicationWindow):
             installed = self.engine.is_framework_installed()
             ver = load_manifest().get(fw, {}).get("nexus", {}).get("version") or ""
             self._se_version_row.set_title("Version")
-            self._se_version_row.set_subtitle(
-                (f"✓  {ver}" if ver else "✓  Installed") if installed else "Not installed"
-            )
+            _ver_text = (f"✓  {ver}" if ver else "✓  Installed") if installed else "Not installed"
+            self._set_se_row(self._se_version_row, self._se_version_val, _ver_text)
+            self._apply_version_css(self._se_version_val, _ver_text)
             fw_cfg = (self.engine.profile.get("smapi")
                       or self.engine.profile.get("bepinex")
                       or {})
@@ -610,23 +640,23 @@ class ModManagerWindow(Adw.ApplicationWindow):
             exe_path = (self.engine.game_root / exe_name) if exe_name else None
             self._se_loader_row.set_title("Executable")
             if exe_path:
-                self._set_row(
-                    self._se_loader_row,
+                self._set_se_row(
+                    self._se_loader_row, self._se_loader_val,
                     self._abbrev_path(exe_path) + ("  ✓" if exe_path.exists() else "  ✗ Not found"),
                 )
             else:
-                self._set_row(self._se_loader_row, "", False)
+                self._set_se_row(self._se_loader_row, self._se_loader_val, "", False)
             launch_name = fw_cfg.get("launch_script")
             launch_path = (self.engine.game_root / launch_name) if launch_name else None
             self._se_launch_row.set_title("Launch script")
             if launch_path and launch_path != exe_path:
-                self._set_row(
-                    self._se_launch_row,
+                self._set_se_row(
+                    self._se_launch_row, self._se_launch_val,
                     self._abbrev_path(launch_path) + ("  ✓" if launch_path.exists() else "  ✗ Not found"),
                 )
             else:
-                self._set_row(self._se_launch_row, "", False)
-            self._set_row(self._se_plugins_dir_row, "", False)
+                self._set_se_row(self._se_launch_row, self._se_launch_val, "", False)
+            self._set_se_row(self._se_plugins_dir_row, self._se_plugins_val, "", False)
         elif se:
             se_name = se.get("name", "Script Extender")
             self._engine_sub_label.set_text(f"{game_name} · {se_name}")
@@ -636,27 +666,64 @@ class ModManagerWindow(Adw.ApplicationWindow):
             self._se_launch_row.set_title("Steam launch")
             se_loader = getattr(paths, "se_loader", None)
             se_installed = bool(se_loader and se_loader.exists())
-            self._se_version_row.set_subtitle("✓ Installed" if se_installed else "✗ Not installed")
-            self._set_row(self._se_loader_row, self._abbrev_path(se_loader) if se_loader else "", bool(se_loader))
+            slug = self._game_slug or ""
+            installed_ver = getattr(self.engine, "get_se_installed_version", lambda: None)()
+            ver_prefix = f"v{installed_ver}" if installed_ver else "Installed"
+            cached_ver = self._se_version_cache.get(slug)
+            if not se_installed:
+                self._set_se_row(self._se_version_row, self._se_version_val, "✗ Not installed")
+                self._apply_version_css(self._se_version_val, "")
+            elif cached_ver:
+                self._set_se_row(self._se_version_row, self._se_version_val, cached_ver)
+                self._apply_version_css(self._se_version_val, cached_ver)
+            elif slug not in self._se_check_in_flight:
+                self._set_se_row(self._se_version_row, self._se_version_val, f"✓ {ver_prefix} — checking…")
+                self._se_check_in_flight.add(slug)
+                engine_ref = self.engine
+                val_ref = self._se_version_val
+                def _check(eng=engine_ref, lbl=val_ref, s=slug, vp=ver_prefix):
+                    info = getattr(eng, "get_se_latest_info", lambda: None)()
+                    if info:
+                        latest = info[0].lstrip("v")
+                        installed_raw = vp.lstrip("v") if vp != "Installed" else None
+                        if installed_raw and installed_raw == latest:
+                            text = f"✓ {vp} — up to date"
+                        elif installed_raw:
+                            text = f"✓ {vp} — v{latest} available"
+                        else:
+                            text = f"✓ Installed — v{latest} available"
+                    else:
+                        text = f"✓ {vp}"
+                    self._se_version_cache[s] = text
+                    self._se_check_in_flight.discard(s)
+                    def _update(t=text, lbl=lbl, s=s):
+                        if self._game_slug == s:
+                            lbl.set_text(t)
+                            self._apply_version_css(lbl, t)
+                        return False
+                    GLib.idle_add(_update)
+                threading.Thread(target=_check, daemon=True).start()
+            self._set_se_row(self._se_loader_row, self._se_loader_val,
+                             self._abbrev_path(se_loader) if se_loader else "", bool(se_loader))
             se_plugins = getattr(paths, "se_plugins_dir", None)
-            self._set_row(
-                self._se_plugins_dir_row,
+            self._set_se_row(
+                self._se_plugins_dir_row, self._se_plugins_val,
                 self._abbrev_path(se_plugins) if se_plugins else "",
                 bool(se_plugins),
             )
             launch_sh = (game_root / "se_launch.sh") if game_root else None
             launch_ok = bool(launch_sh and launch_sh.exists())
-            self._set_row(
-                self._se_launch_row,
+            self._set_se_row(
+                self._se_launch_row, self._se_launch_val,
                 "wrapper active ✓" if launch_ok else "not set up — run Setup below",
             )
         else:
             self._engine_sub_label.set_text(f"{game_name} · Folder mods")
             self._se_group.set_title("No Script Extender")
-            self._se_version_row.set_subtitle("This game uses folder-based mod loading")
-            self._set_row(self._se_loader_row, "", False)
-            self._set_row(self._se_plugins_dir_row, "", False)
-            self._set_row(self._se_launch_row, "", False)
+            self._set_se_row(self._se_version_row, self._se_version_val, "Folder-based mod loading")
+            self._set_se_row(self._se_loader_row, self._se_loader_val, "", False)
+            self._set_se_row(self._se_plugins_dir_row, self._se_plugins_val, "", False)
+            self._set_se_row(self._se_launch_row, self._se_launch_val, "", False)
 
         # ── Installation paths rows ───────────────────────────────────────────
         if paths:
@@ -711,6 +778,17 @@ class ModManagerWindow(Adw.ApplicationWindow):
             self._toast("✓ INI settings applied")
         except Exception as e:
             self._toast(f"INI update failed: {e}")
+
+    def _on_uninstall_se(self, _btn):
+        if not self.engine or not hasattr(self.engine, "uninstall_script_extender"):
+            return
+        try:
+            self.engine.uninstall_script_extender()
+            self._se_version_cache.pop(self._game_slug or "", None)
+            self._refresh_mod_engine_tab()
+            self._toast("✓ Script extender removed")
+        except Exception as e:
+            self._toast(f"Uninstall failed: {e}")
 
     def _show_verify_warnings(self, warnings: list[str]) -> None:
         if warnings:
