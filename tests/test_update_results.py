@@ -1,4 +1,4 @@
-from lsmm.gui.dialogs.update_results import _version_key, _filter_changelogs
+from lsmm.core.nexus import version_key as _version_key, filter_changelogs as _filter_changelogs
 
 
 class TestVersionKey:

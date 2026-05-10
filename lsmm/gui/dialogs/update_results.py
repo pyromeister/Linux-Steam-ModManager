@@ -5,25 +5,7 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, GLib, Gtk
 
-
-def _version_key(v: str):
-    parts = []
-    for part in str(v).split("."):
-        try:
-            parts.append((0, int(part)))
-        except ValueError:
-            parts.append((1, part))
-    return parts
-
-
-def _filter_changelogs(changelogs: dict, installed_version: str) -> dict:
-    if not installed_version:
-        return changelogs
-    try:
-        installed_key = _version_key(installed_version)
-        return {v: t for v, t in changelogs.items() if _version_key(v) > installed_key}
-    except Exception:
-        return changelogs
+from lsmm.core.nexus import version_key as _version_key, filter_changelogs as _filter_changelogs
 
 
 def _show_changelog_dialog(parent, mod_name: str, new_ver: str, changelogs: dict, on_confirm):

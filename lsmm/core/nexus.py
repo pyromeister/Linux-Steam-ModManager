@@ -144,6 +144,28 @@ def check_update(game_domain: str, mod_id: int, current_file_id: int, api_key: s
     return None
 
 
+def version_key(v: str) -> list:
+    """Sortierkey für Versionsstrings: numerische Segmente numerisch, Rest als String."""
+    parts = []
+    for part in str(v).split("."):
+        try:
+            parts.append((0, int(part)))
+        except ValueError:
+            parts.append((1, part))
+    return parts
+
+
+def filter_changelogs(changelogs: dict, installed_version: str) -> dict:
+    """Gibt nur Einträge zurück, deren Version neuer als installed_version ist."""
+    if not installed_version:
+        return changelogs
+    try:
+        installed_key = version_key(installed_version)
+        return {v: t for v, t in changelogs.items() if version_key(v) > installed_key}
+    except Exception:
+        return changelogs
+
+
 def get_mod_changelogs(game_domain: str, mod_id: int, api_key: str) -> dict:
     """GET /games/{domain}/mods/{mod_id}/changelogs.json — returns {version: text}"""
     endpoint = f"{NEXUS_API_BASE}/games/{game_domain}/mods/{mod_id}/changelogs.json"
