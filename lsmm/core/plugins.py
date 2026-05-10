@@ -71,6 +71,9 @@ class PluginsFile:
             entry.active = active
 
     def get_order(self) -> list[str]:
+        return [p.name for p in self.plugins if p.active]
+
+    def get_full_order(self) -> list[str]:
         return [p.name for p in self.plugins]
 
     def set_order(self, order: list[str]) -> None:

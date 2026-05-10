@@ -125,15 +125,21 @@ class TestPluginsFileSetActive:
 
 
 class TestPluginsFileOrder:
-    def test_get_order_returns_names_in_order(self, tmp_path):
+    def test_get_order_returns_only_active(self, tmp_path):
         pf = PluginsFile(path=tmp_path / "p.txt", _lines=[
             PluginEntry("A.esm", True), PluginEntry("B.esp", False)
         ])
-        assert pf.get_order() == ["A.esm", "B.esp"]
+        assert pf.get_order() == ["A.esm"]
+
+    def test_get_full_order_returns_all(self, tmp_path):
+        pf = PluginsFile(path=tmp_path / "p.txt", _lines=[
+            PluginEntry("A.esm", True), PluginEntry("B.esp", False)
+        ])
+        assert pf.get_full_order() == ["A.esm", "B.esp"]
 
     def test_set_order_reorders_plugins(self, tmp_path):
         pf = PluginsFile(path=tmp_path / "p.txt", _lines=[
-            PluginEntry("A.esm", True), PluginEntry("B.esp", False)
+            PluginEntry("A.esm", True), PluginEntry("B.esp", True)
         ])
         pf.set_order(["B.esp", "A.esm"])
         assert pf.get_order() == ["B.esp", "A.esm"]
@@ -143,7 +149,7 @@ class TestPluginsFileOrder:
             PluginEntry("A.esm", True), PluginEntry("B.esp", False)
         ])
         pf.set_order(["A.esm"])
-        assert "B.esp" in pf.get_order()
+        assert "B.esp" in pf.get_full_order()
 
     def test_set_order_preserves_comment_lines(self, tmp_path):
         comment = "# header"

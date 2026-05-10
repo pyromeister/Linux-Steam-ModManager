@@ -73,6 +73,7 @@ class ModManagerWindow(Adw.ApplicationWindow):
         self._se_check_in_flight: set = set()
         self._tracked_cache: dict = {}
         self._tracked_fetch_in_flight: set = set()
+        self._tracked_rows: list = []  # get_first_child() hits Adwaita internals on PreferencesGroup
 
         self._build_ui()
         self._update_setup_btn()
@@ -334,9 +335,12 @@ class ModManagerWindow(Adw.ApplicationWindow):
         self._profiles_active_label.set_text(f"Active: {active_name}" if active_name else "")
 
         mods_overview = None
-        if self.engine and any(d.get("collection_mods") for d in all_profiles.values()):
-            mods = self.engine.list_mods()
-            mods_overview = (sum(1 for m in mods if m["active"]), len(mods))
+        if self.engine:
+            try:
+                mods = self.engine.list_mods()
+                mods_overview = (sum(1 for m in mods if m["active"]), len(mods))
+            except Exception:
+                pass
 
         for name, data in all_profiles.items():
             self._profiles_list.append(self._make_profile_row(name, data, active_name, slug, mods_overview))
@@ -344,9 +348,12 @@ class ModManagerWindow(Adw.ApplicationWindow):
     def _make_profile_row(self, name, data, active_name, slug, mods_overview=None):
         row = Adw.ActionRow()
         row.set_title(name)
-        if data.get("collection_mods") and mods_overview:
+        if mods_overview:
             n_active, total = mods_overview
-            row.set_subtitle(f"{n_active} / {total} active")
+            if n_active == total:
+                row.set_subtitle(f"{total} mod{'s' if total != 1 else ''}")
+            else:
+                row.set_subtitle(f"{n_active} / {total} active")
         else:
             mod_count = len(data.get("active_mods", []))
             row.set_subtitle(f"{mod_count} mod{'s' if mod_count != 1 else ''}")
@@ -476,10 +483,10 @@ class ModManagerWindow(Adw.ApplicationWindow):
     @staticmethod
     def _set_version_label(lbl: Gtk.Label, text: str) -> None:
         import html
-        if "up to date" in text:
-            markup = f'<span foreground="#2ec27e">{html.escape(text)}</span>'
-        elif "available" in text:
+        if "available" in text:
             markup = f'<span foreground="#e5a50a">{html.escape(text)}</span>'
+        elif text.startswith("✓"):
+            markup = f'<span foreground="#2ec27e">{html.escape(text)}</span>'
         else:
             markup = html.escape(text)
         lbl.set_markup(markup)
@@ -655,7 +662,10 @@ class ModManagerWindow(Adw.ApplicationWindow):
                     self._se_check_in_flight.add(slug)
                     val_ref = self._se_version_val
 
-                    def _fw_check(repo=github_repo, lbl=val_ref, s=slug, vp=ver_prefix):
+                    eng_ref = self.engine
+
+                    def _fw_check(repo=github_repo, lbl=val_ref, s=slug, vp=ver_prefix,
+                                  eng=eng_ref):
                         latest = fetch_github_latest_tag(repo)
                         installed_raw = vp.lstrip("v") if vp != "Installed" else None
                         if latest:
@@ -664,7 +674,15 @@ class ModManagerWindow(Adw.ApplicationWindow):
                             elif installed_raw:
                                 text = f"✓ {vp} — v{latest} available"
                             else:
-                                text = f"✓ Installed — v{latest} available"
+                                GLib.idle_add(lambda: (
+                                    self._game_slug == s
+                                    and self._set_version_label(lbl, "✓ Installed — updating…")
+                                ) or False)
+                                try:
+                                    new_ver = eng.setup_framework()
+                                    text = f"✓ v{new_ver} — up to date"
+                                except Exception:
+                                    text = f"✓ Installed — v{latest} available"
                         else:
                             text = f"✓ {vp}"
                         self._se_version_cache[s] = text
@@ -1228,6 +1246,8 @@ class ModManagerWindow(Adw.ApplicationWindow):
             else:
                 self.engine.disable_mod(mod_name)
             GLib.idle_add(self._update_active_set_label)
+            if self.engine.has_load_order:
+                GLib.idle_add(self._refresh_load_order)
         threading.Thread(target=run, daemon=True).start()
 
     # ── Install ───────────────────────────────────────────────────────────────
@@ -1414,8 +1434,9 @@ class ModManagerWindow(Adw.ApplicationWindow):
         if self._game_slug != slug:
             return
 
-        while child := self._tracked_group.get_first_child():
-            self._tracked_group.remove(child)
+        for row in self._tracked_rows:
+            self._tracked_group.remove(row)
+        self._tracked_rows.clear()
 
         tracked = self._tracked_cache.get(slug, [])
         if not tracked:
@@ -1449,6 +1470,7 @@ class ModManagerWindow(Adw.ApplicationWindow):
             open_btn.connect("clicked", lambda _b, url=nexus_url: self._open_nexus_page(url))
             row.add_suffix(open_btn)
             self._tracked_group.add(row)
+            self._tracked_rows.append(row)
 
     def _open_nexus_page(self, url: str) -> None:
         import subprocess
