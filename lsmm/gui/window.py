@@ -654,6 +654,7 @@ class ModManagerWindow(Adw.ApplicationWindow):
                     self._set_version_label(self._se_version_val, f"✓ {ver_prefix} — checking…")
                     self._se_check_in_flight.add(slug)
                     val_ref = self._se_version_val
+
                     def _fw_check(repo=github_repo, lbl=val_ref, s=slug, vp=ver_prefix):
                         latest = fetch_github_latest_tag(repo)
                         installed_raw = vp.lstrip("v") if vp != "Installed" else None
@@ -668,6 +669,7 @@ class ModManagerWindow(Adw.ApplicationWindow):
                             text = f"✓ {vp}"
                         self._se_version_cache[s] = text
                         self._se_check_in_flight.discard(s)
+
                         def _update(t=text, lbl=lbl, s=s):
                             if self._game_slug == s:
                                 self._set_version_label(lbl, t)
@@ -724,6 +726,7 @@ class ModManagerWindow(Adw.ApplicationWindow):
                 self._se_check_in_flight.add(slug)
                 engine_ref = self.engine
                 val_ref = self._se_version_val
+
                 def _check(eng=engine_ref, lbl=val_ref, s=slug, vp=ver_prefix):
                     info = getattr(eng, "get_se_latest_info", lambda: None)()
                     if info:
@@ -739,6 +742,7 @@ class ModManagerWindow(Adw.ApplicationWindow):
                         text = f"✓ {vp}"
                     self._se_version_cache[s] = text
                     self._se_check_in_flight.discard(s)
+
                     def _update(t=text, lbl=lbl, s=s):
                         if self._game_slug == s:
                             self._set_version_label(lbl, t)
