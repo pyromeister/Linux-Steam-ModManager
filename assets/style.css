@@ -1,3 +1,7 @@
+/* SE version status colors */
+label.se-status-ok { color: #2ec27e; }
+label.se-status-warn { color: #e5a50a; }
+
 /* Games flyout panel — opaque sidebar background so overlay doesn't bleed through */
 .games-flyout-panel {
     background-color: @sidebar_bg_color;

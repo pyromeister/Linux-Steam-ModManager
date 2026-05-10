@@ -9,7 +9,6 @@
     "name": "SFSE",
     "loader_exe": "sfse_loader.exe",
     "plugins_dir": "Data/SFSE/Plugins",
-    "github_repo": "ianpatt/sfse",
     "asset_prefix": "sfse_"
   }
 }

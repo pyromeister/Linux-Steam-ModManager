@@ -13,6 +13,18 @@ from lsmm.core.installer import extract
 from lsmm.core.nexus import download_file
 
 
+def fetch_github_latest_tag(repo: str) -> str | None:
+    """Return latest release tag (version stripped of leading 'v') or None on failure."""
+    try:
+        data = net.request(
+            f"https://api.github.com/repos/{repo}/releases/latest",
+            headers={"Accept": "application/vnd.github+json"},
+        )
+        return json.loads(data).get("tag_name", "").lstrip("v") or None
+    except Exception:
+        return None
+
+
 class ScriptExtenderManager:
     """Manages a script extender / framework for a single game.
 

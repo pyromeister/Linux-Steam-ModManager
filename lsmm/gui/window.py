@@ -30,6 +30,7 @@ from lsmm.gui.handlers.games import build_games_panel, refresh_games
 from lsmm.gui.handlers.load_order import build_load_order_panel, refresh_load_order
 from lsmm.gui.handlers import setup as setup_handler
 from lsmm.core import profiles as _prof
+from lsmm.core.script_extender import fetch_github_latest_tag
 from lsmm.gui.dialogs.api_key import show_api_key_dialog, show_nxm_api_key_hint
 from lsmm.gui.dialogs.steam_path import show_steam_path_dialog
 from lsmm.gui.dialogs.first_run import show_first_run_wizard
@@ -208,7 +209,7 @@ class ModManagerWindow(Adw.ApplicationWindow):
         ).set_icon_name("package-x-generic-symbolic")
         self.load_order_panel = build_load_order_panel(self)
         self._lo_page = self._view_stack.add_titled(self.load_order_panel, "load-order", "Load Order")
-        self._lo_page.set_icon_name("view-list-ordered-symbolic")
+        self._lo_page.set_icon_name("view-list-symbolic")
         self._lo_page.set_visible(False)
         self._view_stack.connect("notify::visible-child", self._on_tab_switched)
         view_switcher = Adw.ViewSwitcher()
@@ -471,14 +472,15 @@ class ModManagerWindow(Adw.ApplicationWindow):
         row.set_visible(visible)
 
     @staticmethod
-    def _version_markup(text: str) -> str:
+    def _set_version_label(lbl: Gtk.Label, text: str) -> None:
         import html
-        escaped = html.escape(text)
         if "up to date" in text:
-            return f'<span color="#2ec27e">{escaped}</span>'
-        if "available" in text:
-            return f'<span color="#e5a50a">{escaped}</span>'
-        return escaped
+            markup = f'<span foreground="#2ec27e">{html.escape(text)}</span>'
+        elif "available" in text:
+            markup = f'<span foreground="#e5a50a">{html.escape(text)}</span>'
+        else:
+            markup = html.escape(text)
+        lbl.set_markup(markup)
 
     def _build_mod_engine_tab(self) -> Gtk.Widget:
         outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
@@ -524,11 +526,13 @@ class ModManagerWindow(Adw.ApplicationWindow):
             row.set_title(title)
             lbl = Gtk.Label()
             lbl.set_halign(Gtk.Align.END)
+            lbl.set_use_markup(True)
             lbl.add_css_class("dim-label")
             row.add_suffix(lbl)
             return row, lbl
 
         self._se_version_row, self._se_version_val = _make_se_info_row("Version")
+        self._se_version_val.remove_css_class("dim-label")
         self._se_group.add(self._se_version_row)
 
         self._se_loader_row, self._se_loader_val = _make_se_info_row("Loader")
@@ -626,17 +630,52 @@ class ModManagerWindow(Adw.ApplicationWindow):
         if getattr(self.engine, "has_framework_setup", False):
             from lsmm.core.installer import load_manifest
             fw = getattr(self.engine, "framework_name", "BepInEx")
+            fw_cfg = (self.engine.profile.get("smapi")
+                      or self.engine.profile.get("bepinex")
+                      or {})
             self._engine_sub_label.set_text(f"{game_name} · {fw}")
             self._se_group.set_title(fw)
             installed = self.engine.is_framework_installed()
             ver = load_manifest().get(fw, {}).get("nexus", {}).get("version") or ""
             self._se_version_row.set_title("Version")
-            _ver_text = (f"✓  {ver}" if ver else "✓  Installed") if installed else "Not installed"
             self._se_version_row.set_visible(True)
-            self._se_version_val.set_markup(self._version_markup(_ver_text))
-            fw_cfg = (self.engine.profile.get("smapi")
-                      or self.engine.profile.get("bepinex")
-                      or {})
+            github_repo = fw_cfg.get("github_repo")
+            slug = self._game_slug or ""
+            ver_prefix = f"v{ver}" if ver else "Installed"
+            if not installed:
+                self._set_version_label(self._se_version_val, "Not installed")
+            elif github_repo:
+                cached_ver = self._se_version_cache.get(slug)
+                if cached_ver:
+                    self._set_version_label(self._se_version_val, cached_ver)
+                elif slug not in self._se_check_in_flight:
+                    self._set_version_label(self._se_version_val, f"✓ {ver_prefix} — checking…")
+                    self._se_check_in_flight.add(slug)
+                    val_ref = self._se_version_val
+                    def _fw_check(repo=github_repo, lbl=val_ref, s=slug, vp=ver_prefix):
+                        latest = fetch_github_latest_tag(repo)
+                        installed_raw = vp.lstrip("v") if vp != "Installed" else None
+                        if latest:
+                            if installed_raw and installed_raw == latest:
+                                text = f"✓ {vp} — up to date"
+                            elif installed_raw:
+                                text = f"✓ {vp} — v{latest} available"
+                            else:
+                                text = f"✓ Installed — v{latest} available"
+                        else:
+                            text = f"✓ {vp}"
+                        self._se_version_cache[s] = text
+                        self._se_check_in_flight.discard(s)
+                        def _update(t=text, lbl=lbl, s=s):
+                            if self._game_slug == s:
+                                self._set_version_label(lbl, t)
+                            return False
+                        GLib.idle_add(_update)
+                    threading.Thread(target=_fw_check, daemon=True).start()
+                else:
+                    self._set_version_label(self._se_version_val, f"✓ {ver_prefix} — checking…")
+            else:
+                self._set_version_label(self._se_version_val, f"✓ {ver_prefix}" if installed else "Not installed")
             exe_name = fw_cfg.get("executable", fw)
             exe_path = (self.engine.game_root / exe_name) if exe_name else None
             self._se_loader_row.set_title("Executable")
@@ -673,13 +712,13 @@ class ModManagerWindow(Adw.ApplicationWindow):
             cached_ver = self._se_version_cache.get(slug)
             if not se_installed:
                 self._se_version_row.set_visible(True)
-                self._se_version_val.set_markup("✗ Not installed")
+                self._set_version_label(self._se_version_val, "✗ Not installed")
             elif cached_ver:
                 self._se_version_row.set_visible(True)
-                self._se_version_val.set_markup(self._version_markup(cached_ver))
+                self._set_version_label(self._se_version_val, cached_ver)
             elif slug not in self._se_check_in_flight:
                 self._se_version_row.set_visible(True)
-                self._se_version_val.set_markup(f"✓ {ver_prefix} — checking…")
+                self._set_version_label(self._se_version_val, f"✓ {ver_prefix} — checking…")
                 self._se_check_in_flight.add(slug)
                 engine_ref = self.engine
                 val_ref = self._se_version_val
@@ -700,7 +739,7 @@ class ModManagerWindow(Adw.ApplicationWindow):
                     self._se_check_in_flight.discard(s)
                     def _update(t=text, lbl=lbl, s=s):
                         if self._game_slug == s:
-                            lbl.set_markup(self._version_markup(t))
+                            self._set_version_label(lbl, t)
                         return False
                     GLib.idle_add(_update)
                 threading.Thread(target=_check, daemon=True).start()
