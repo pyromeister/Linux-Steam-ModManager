@@ -12,15 +12,15 @@ class ModRow(Gtk.ListBoxRow):
         box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         box.set_margin_start(8)
         box.set_margin_end(8)
-        box.set_margin_top(5)
-        box.set_margin_bottom(5)
+        box.set_margin_top(7)
+        box.set_margin_bottom(7)
         self.set_child(box)
 
-        check = Gtk.CheckButton()
-        check.set_active(mod["active"])
-        check.set_valign(Gtk.Align.CENTER)
-        check.connect("toggled", lambda btn: on_toggle(self.mod_name, btn.get_active()))
-        box.append(check)
+        self._check = Gtk.CheckButton()
+        self._check.set_active(mod["active"])
+        self._check.set_valign(Gtk.Align.CENTER)
+        self._check.connect("toggled", lambda btn: on_toggle(self.mod_name, btn.get_active()))
+        box.append(self._check)
 
         label_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         label_box.set_hexpand(True)
@@ -83,3 +83,6 @@ class ModRow(Gtk.ListBoxRow):
             ver_chip.add_css_class("caption")
             ver_chip.set_valign(Gtk.Align.CENTER)
             box.append(ver_chip)
+
+    def toggle(self) -> None:
+        self._check.set_active(not self._check.get_active())

@@ -285,7 +285,8 @@ class ModManagerWindow(Adw.ApplicationWindow):
         scroll.set_vexpand(True)
         scroll.set_visible(False)
         self._profiles_list = Gtk.ListBox()
-        self._profiles_list.set_selection_mode(Gtk.SelectionMode.NONE)
+        self._profiles_list.set_selection_mode(Gtk.SelectionMode.BROWSE)
+        self._profiles_list.connect("row-activated", lambda _l, row: self._on_load_profile(row.get_title()))
         self._profiles_list.add_css_class("boxed-list")
         self._profiles_list.set_margin_start(12)
         self._profiles_list.set_margin_end(12)
@@ -1102,6 +1103,7 @@ class ModManagerWindow(Adw.ApplicationWindow):
 
         self.mods_list = Gtk.ListBox()
         self.mods_list.set_selection_mode(Gtk.SelectionMode.SINGLE)
+        self.mods_list.connect("row-activated", self._on_mod_row_activated)
         self.mods_list.add_css_class("boxed-list")
         self.mods_list.set_margin_start(12)
         self.mods_list.set_margin_end(12)
@@ -1238,6 +1240,11 @@ class ModManagerWindow(Adw.ApplicationWindow):
             self._toast("Launching via Steam…")
         except Exception as e:
             self._toast(f"Launch failed: {e}")
+
+    def _on_mod_row_activated(self, _list, row):
+        from lsmm.gui.widgets.mod_row import ModRow
+        if isinstance(row, ModRow):
+            row.toggle()
 
     def _on_toggle_mod(self, mod_name: str, active: bool):
         def run():

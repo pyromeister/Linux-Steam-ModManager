@@ -38,7 +38,7 @@ def build_load_order_panel(win):
     inner.append(scroll)
 
     win.plugins_list = Gtk.ListBox()
-    win.plugins_list.set_selection_mode(Gtk.SelectionMode.NONE)
+    win.plugins_list.set_selection_mode(Gtk.SelectionMode.BROWSE)
     win.plugins_list.add_css_class("boxed-list")
     win.plugins_list.set_margin_start(12)
     win.plugins_list.set_margin_end(12)
