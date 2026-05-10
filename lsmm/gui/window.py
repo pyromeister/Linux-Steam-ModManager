@@ -471,13 +471,14 @@ class ModManagerWindow(Adw.ApplicationWindow):
         row.set_visible(visible)
 
     @staticmethod
-    def _apply_version_css(lbl: Gtk.Label, text: str) -> None:
-        for cls in ("success", "warning"):
-            lbl.remove_css_class(cls)
+    def _version_markup(text: str) -> str:
+        import html
+        escaped = html.escape(text)
         if "up to date" in text:
-            lbl.add_css_class("success")
-        elif "available" in text:
-            lbl.add_css_class("warning")
+            return f'<span color="#2ec27e">{escaped}</span>'
+        if "available" in text:
+            return f'<span color="#e5a50a">{escaped}</span>'
+        return escaped
 
     def _build_mod_engine_tab(self) -> Gtk.Widget:
         outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
@@ -631,8 +632,8 @@ class ModManagerWindow(Adw.ApplicationWindow):
             ver = load_manifest().get(fw, {}).get("nexus", {}).get("version") or ""
             self._se_version_row.set_title("Version")
             _ver_text = (f"✓  {ver}" if ver else "✓  Installed") if installed else "Not installed"
-            self._set_se_row(self._se_version_row, self._se_version_val, _ver_text)
-            self._apply_version_css(self._se_version_val, _ver_text)
+            self._se_version_row.set_visible(True)
+            self._se_version_val.set_markup(self._version_markup(_ver_text))
             fw_cfg = (self.engine.profile.get("smapi")
                       or self.engine.profile.get("bepinex")
                       or {})
@@ -671,13 +672,14 @@ class ModManagerWindow(Adw.ApplicationWindow):
             ver_prefix = f"v{installed_ver}" if installed_ver else "Installed"
             cached_ver = self._se_version_cache.get(slug)
             if not se_installed:
-                self._set_se_row(self._se_version_row, self._se_version_val, "✗ Not installed")
-                self._apply_version_css(self._se_version_val, "")
+                self._se_version_row.set_visible(True)
+                self._se_version_val.set_markup("✗ Not installed")
             elif cached_ver:
-                self._set_se_row(self._se_version_row, self._se_version_val, cached_ver)
-                self._apply_version_css(self._se_version_val, cached_ver)
+                self._se_version_row.set_visible(True)
+                self._se_version_val.set_markup(self._version_markup(cached_ver))
             elif slug not in self._se_check_in_flight:
-                self._set_se_row(self._se_version_row, self._se_version_val, f"✓ {ver_prefix} — checking…")
+                self._se_version_row.set_visible(True)
+                self._se_version_val.set_markup(f"✓ {ver_prefix} — checking…")
                 self._se_check_in_flight.add(slug)
                 engine_ref = self.engine
                 val_ref = self._se_version_val
@@ -698,8 +700,7 @@ class ModManagerWindow(Adw.ApplicationWindow):
                     self._se_check_in_flight.discard(s)
                     def _update(t=text, lbl=lbl, s=s):
                         if self._game_slug == s:
-                            lbl.set_text(t)
-                            self._apply_version_css(lbl, t)
+                            lbl.set_markup(self._version_markup(t))
                         return False
                     GLib.idle_add(_update)
                 threading.Thread(target=_check, daemon=True).start()
