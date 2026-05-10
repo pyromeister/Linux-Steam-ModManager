@@ -1,7 +1,13 @@
+import logging
 import threading
+from pathlib import Path
 
 from lsmm.core.fomod import detect_fomod
-from lsmm.core.installer import ConflictError
+from lsmm.core.installer import ConflictError, load_manifest, save_manifest
+from lsmm.core.config import get_nexus_api_key
+from lsmm.core.nexus import md5_file, search_by_md5
+
+logger = logging.getLogger(__name__)
 
 
 def _glib():
@@ -65,6 +71,46 @@ def _install_one(window, path, engine) -> bool:
         return False
 
 
+def _enrich_from_md5(window, path: Path, mod_name: str) -> None:
+    """Background: compute MD5, query Nexus, patch manifest nexus sub-dict if matched."""
+    api_key = get_nexus_api_key()
+    if not api_key:
+        return
+    engine = window.engine
+    if engine is None:
+        return
+    game_domain = (getattr(engine, "profile", None) or {}).get("nexus_domain")
+    if not game_domain:
+        return
+
+    try:
+        md5 = md5_file(path)
+        result = search_by_md5(game_domain, md5, api_key)
+    except Exception as e:
+        logger.debug("MD5 Nexus lookup failed for %s: %s", path.name, e)
+        return
+
+    if not result:
+        return
+
+    manifest = load_manifest()
+    entry = manifest.get(mod_name)
+    if entry is None:
+        return
+    # Only enrich when the entry has no existing Nexus metadata
+    if entry.get("nexus"):
+        return
+
+    entry["nexus"] = {
+        "mod_id": result["mod_id"],
+        "file_id": result["file_id"],
+        "version": result.get("version"),
+        "url": result.get("url"),
+    }
+    save_manifest(manifest)
+    _glib().idle_add(window._refresh_mods)
+
+
 def install_batch(window, paths: list):
     if window._installing:
         window._toast("Installation already in progress")
@@ -82,6 +128,12 @@ def install_batch(window, paths: list):
             )
             if _install_one(window, path, window.engine):
                 succeeded += 1
+                mod_name = path.stem
+                threading.Thread(
+                    target=_enrich_from_md5,
+                    args=(window, path, mod_name),
+                    daemon=True,
+                ).start()
 
         window._installing = False
         _glib().idle_add(window._progress_done)

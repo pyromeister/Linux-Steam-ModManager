@@ -144,6 +144,53 @@ def check_update(game_domain: str, mod_id: int, current_file_id: int, api_key: s
     return None
 
 
+def get_mod_changelogs(game_domain: str, mod_id: int, api_key: str) -> dict:
+    """GET /games/{domain}/mods/{mod_id}/changelogs.json — returns {version: text}"""
+    endpoint = f"{NEXUS_API_BASE}/games/{game_domain}/mods/{mod_id}/changelogs.json"
+    try:
+        data = json.loads(net.request(endpoint, headers=_api_headers(api_key)))
+    except Exception:
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return data
+
+
+def get_tracked_mods(api_key: str) -> list[dict]:
+    """GET /user/tracked_mods.json — returns list of {mod_id, domain_name, ...}"""
+    endpoint = f"{NEXUS_API_BASE}/user/tracked_mods.json"
+    try:
+        return json.loads(net.request(endpoint, headers=_api_headers(api_key)))
+    except urllib.error.HTTPError as e:
+        body = e.read().decode(errors="replace")
+        raise RuntimeError(f"Nexus API {e.code}: {body}") from e
+
+
+def search_by_md5(game_domain: str, md5_hash: str, api_key: str) -> dict | None:
+    """Query Nexus md5_search. Returns dict with mod_id, file_id, name, version, url or None."""
+    endpoint = f"{NEXUS_API_BASE}/games/{game_domain}/mods/md5_search/{md5_hash}.json"
+    try:
+        data = json.loads(net.request(endpoint, headers=_api_headers(api_key)))
+    except Exception:
+        return None
+    if not data:
+        return None
+    first = data[0]
+    try:
+        mod = first["mod"]
+        fd = first["file_details"]
+        mod_id = mod["mod_id"]
+        return {
+            "mod_id": mod_id,
+            "file_id": fd["file_id"],
+            "name": mod["name"],
+            "version": fd.get("version"),
+            "url": f"https://www.nexusmods.com/{game_domain}/mods/{mod_id}",
+        }
+    except (KeyError, TypeError):
+        return None
+
+
 def fetch_collection(slug: str, api_key: str) -> dict | None:
     """Fetch collection metadata from Nexus API. Returns None on any failure."""
     endpoint = f"{NEXUS_API_BASE}/collections/{slug}.json"

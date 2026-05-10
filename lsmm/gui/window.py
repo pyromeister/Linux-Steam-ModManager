@@ -71,6 +71,8 @@ class ModManagerWindow(Adw.ApplicationWindow):
         self._pending_nxm: str | None = pending_nxm
         self._se_version_cache: dict = {}
         self._se_check_in_flight: set = set()
+        self._tracked_cache: dict = {}
+        self._tracked_fetch_in_flight: set = set()
 
         self._build_ui()
         self._update_setup_btn()
@@ -988,6 +990,7 @@ class ModManagerWindow(Adw.ApplicationWindow):
         self.launch_btn.set_sensitive(bool(self.engine.profile.get("steam_app_id")))
         self._refresh_mod_engine_tab()
         GLib.idle_add(self._refresh_profiles_tab)
+        self._fetch_tracked_mods(slug)
 
         paths = getattr(self.engine, "paths", None)
         if paths and hasattr(paths, "proton_prefix") and not paths.proton_prefix.exists():
@@ -1085,6 +1088,15 @@ class ModManagerWindow(Adw.ApplicationWindow):
         self.mods_content_stack.add_named(scroll, "list")
 
         panel.append(self.mods_content_stack)
+
+        self._tracked_group = Adw.PreferencesGroup()
+        self._tracked_group.set_title("Tracked on Nexus")
+        self._tracked_group.set_margin_start(12)
+        self._tracked_group.set_margin_end(12)
+        self._tracked_group.set_margin_top(8)
+        self._tracked_group.set_margin_bottom(4)
+        self._tracked_group.set_visible(False)
+        panel.append(self._tracked_group)
 
         btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         btn_box.set_margin_start(12)
@@ -1370,6 +1382,76 @@ class ModManagerWindow(Adw.ApplicationWindow):
         if self.engine and hasattr(self.engine, "filesystem_nexus_ids"):
             ids |= self.engine.filesystem_nexus_ids()
         return ids
+
+    def _fetch_tracked_mods(self, slug: str) -> None:
+        api_key = get_nexus_api_key()
+        if not api_key:
+            return
+        if slug in self._tracked_cache:
+            self._populate_tracked_group(slug)
+            return
+        if slug in self._tracked_fetch_in_flight:
+            return
+        self._tracked_fetch_in_flight.add(slug)
+
+        def _bg(s=slug, key=api_key):
+            from lsmm.core.nexus import get_tracked_mods
+            try:
+                mods = get_tracked_mods(key)
+            except Exception:
+                mods = []
+            self._tracked_cache[s] = mods
+            self._tracked_fetch_in_flight.discard(s)
+            GLib.idle_add(lambda: self._populate_tracked_group(s) or False)
+
+        threading.Thread(target=_bg, daemon=True).start()
+
+    def _populate_tracked_group(self, slug: str) -> None:
+        if self._game_slug != slug:
+            return
+
+        while child := self._tracked_group.get_first_child():
+            self._tracked_group.remove(child)
+
+        tracked = self._tracked_cache.get(slug, [])
+        if not tracked:
+            self._tracked_group.set_visible(False)
+            return
+
+        profile = self.engine.profile if self.engine else {}
+        nexus_domain = profile.get("nexus_domain", "")
+        installed_ids = self._get_installed_nexus_mod_ids(slug)
+
+        uninstalled = [
+            m for m in tracked
+            if m.get("domain_name", "").lower() == nexus_domain.lower()
+            and int(m.get("mod_id", 0)) not in installed_ids
+        ]
+
+        if not uninstalled:
+            self._tracked_group.set_visible(False)
+            return
+
+        self._tracked_group.set_visible(True)
+        for mod in uninstalled:
+            mod_id = mod.get("mod_id")
+            mod_name = mod.get("name") or f"Mod #{mod_id}"
+            row = Adw.ActionRow()
+            row.set_title(mod_name)
+            nexus_url = f"https://www.nexusmods.com/{nexus_domain}/mods/{mod_id}"
+            open_btn = Gtk.Button(label="Open")
+            open_btn.set_valign(Gtk.Align.CENTER)
+            open_btn.add_css_class("flat")
+            open_btn.connect("clicked", lambda _b, url=nexus_url: self._open_nexus_page(url))
+            row.add_suffix(open_btn)
+            self._tracked_group.add(row)
+
+    def _open_nexus_page(self, url: str) -> None:
+        import subprocess
+        try:
+            subprocess.Popen(["xdg-open", url])
+        except Exception as e:
+            self._toast(f"Could not open browser: {e}")
 
     # ── Header actions ────────────────────────────────────────────────────────
 

@@ -285,6 +285,8 @@ class GamePaths:
         if self.se_loader and not self.se_loader.exists():
             se_name = self.profile["script_extender"]["name"]
             warnings.append(f"{se_name} loader not found: {self.se_loader}")
+        if self.profile.get("game_exe", "").endswith(".exe") and not self.proton_prefix.exists():
+            warnings.append(f"Proton prefix missing — launch {self.profile['name']} in Steam first")
         if self.on_microsd:
             warnings.append("Game is on microSD card — may cause slow load times or issues if card is removed")
         return warnings

@@ -37,6 +37,7 @@ def do_check_updates(window, api_key: str):
                         nx["game_domain"],
                         nx["mod_id"],
                         latest.get("file_id"),
+                        nx.get("version") or "",
                     ))
             except Exception as e:
                 errors.append(f"{mod_name}: {e}")
@@ -54,7 +55,7 @@ def update_all_async(window, updates: list):
 
     def run():
         browser_mods = []
-        for mod_name, _old_fid, _new_ver, game_domain, mod_id, new_file_id in updates:
+        for mod_name, _old_fid, _new_ver, game_domain, mod_id, new_file_id, *_ in updates:
             nxm = {"game_domain": game_domain, "mod_id": mod_id, "file_id": new_file_id}
             try:
                 GLib.idle_add(window.status_label.set_text, f"Updating {mod_name}…")

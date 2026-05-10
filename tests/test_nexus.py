@@ -292,3 +292,32 @@ def test_nxm_error_message_unknown():
     from lsmm.core.nexus import nxm_error_message as _nxm_error_message
     msg = _nxm_error_message(RuntimeError("some random error"))
     assert "NXM import failed" in msg
+
+
+class TestGetModChangelogs:
+    def test_returns_version_dict(self):
+        fake = {"1.0": "Initial release", "1.1": "Bug fixes"}
+        with patch("lsmm.core.nexus.net.request") as mock_req:
+            mock_req.return_value = json.dumps(fake)
+            result = nexus.get_mod_changelogs("skyrimspecialedition", 1, "apikey")
+        assert result == fake
+
+    def test_returns_empty_on_network_error(self):
+        with patch("lsmm.core.nexus.net.request", side_effect=Exception("fail")):
+            result = nexus.get_mod_changelogs("skyrimspecialedition", 1, "apikey")
+        assert result == {}
+
+    def test_returns_empty_when_response_not_dict(self):
+        with patch("lsmm.core.nexus.net.request") as mock_req:
+            mock_req.return_value = json.dumps([])
+            result = nexus.get_mod_changelogs("skyrimspecialedition", 1, "apikey")
+        assert result == {}
+
+    def test_hits_correct_endpoint(self):
+        with patch("lsmm.core.nexus.net.request") as mock_req:
+            mock_req.return_value = json.dumps({})
+            nexus.get_mod_changelogs("fallout4", 42, "apikey")
+        url = mock_req.call_args[0][0]
+        assert "fallout4" in url
+        assert "42" in url
+        assert "changelogs.json" in url
