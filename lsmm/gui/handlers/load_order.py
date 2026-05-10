@@ -68,17 +68,7 @@ def build_load_order_panel(win):
     return panel
 
 
-def refresh_load_order(win):
-    if not win.engine or not win.engine.has_load_order:
-        return
-    from lsmm.gui.widgets.plugin_row import PluginRow
-    while child := win.plugins_list.get_first_child():
-        win.plugins_list.remove(child)
-    for i, name in enumerate(win.engine.get_load_order()):
-        win.plugins_list.append(PluginRow(name, i, lambda dn, tn: move_plugin(win, dn, tn)))
-
-
-def save_order(win):
+def _get_order(win) -> list:
     from lsmm.gui.widgets.plugin_row import PluginRow
     order = []
     child = win.plugins_list.get_first_child()
@@ -86,7 +76,29 @@ def save_order(win):
         if isinstance(child, PluginRow):
             order.append(child.plugin_name)
         child = child.get_next_sibling()
-    win.engine.set_load_order(order)
+    return order
+
+
+def _rebuild(win, order: list) -> None:
+    from lsmm.gui.widgets.plugin_row import PluginRow
+    while child := win.plugins_list.get_first_child():
+        win.plugins_list.remove(child)
+    for i, name in enumerate(order):
+        win.plugins_list.append(PluginRow(
+            name, i,
+            on_move=lambda dn, tn: move_plugin(win, dn, tn),
+            on_step=lambda n, d: step_plugin(win, n, d),
+        ))
+
+
+def refresh_load_order(win):
+    if not win.engine or not win.engine.has_load_order:
+        return
+    _rebuild(win, win.engine.get_load_order())
+
+
+def save_order(win):
+    win.engine.set_load_order(_get_order(win))
     win._toast("Load order saved")
 
 
@@ -103,21 +115,22 @@ def do_sort_with_loot(win) -> None:
 
 
 def move_plugin(win, dragged_name: str, target_name: str):
-    from lsmm.gui.widgets.plugin_row import PluginRow
-    order = []
-    child = win.plugins_list.get_first_child()
-    while child:
-        if isinstance(child, PluginRow):
-            order.append(child.plugin_name)
-        child = child.get_next_sibling()
-
+    order = _get_order(win)
     if dragged_name not in order or target_name not in order or dragged_name == target_name:
         return
-
     order.remove(dragged_name)
     order.insert(order.index(target_name), dragged_name)
+    _rebuild(win, order)
 
-    while child := win.plugins_list.get_first_child():
-        win.plugins_list.remove(child)
-    for i, name in enumerate(order):
-        win.plugins_list.append(PluginRow(name, i, lambda dn, tn: move_plugin(win, dn, tn)))
+
+def step_plugin(win, name: str, delta: int):
+    order = _get_order(win)
+    if name not in order:
+        return
+    idx = order.index(name)
+    new_idx = max(0, min(len(order) - 1, idx + delta))
+    if new_idx == idx:
+        return
+    order.pop(idx)
+    order.insert(new_idx, name)
+    _rebuild(win, order)

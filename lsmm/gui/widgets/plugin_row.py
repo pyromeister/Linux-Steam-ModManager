@@ -6,7 +6,7 @@ from gi.repository import Gdk, GObject, Gtk, Pango
 
 
 class PluginRow(Gtk.ListBoxRow):
-    def __init__(self, name: str, index: int, on_move=None):
+    def __init__(self, name: str, index: int, on_move=None, on_step=None):
         super().__init__()
         self.plugin_name = name
         self._on_move = on_move
@@ -14,8 +14,8 @@ class PluginRow(Gtk.ListBoxRow):
         box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         box.set_margin_start(8)
         box.set_margin_end(8)
-        box.set_margin_top(5)
-        box.set_margin_bottom(5)
+        box.set_margin_top(7)
+        box.set_margin_bottom(7)
         self.set_child(box)
 
         self._num_label = Gtk.Label(label=str(index + 1))
@@ -32,6 +32,23 @@ class PluginRow(Gtk.ListBoxRow):
         label.set_ellipsize(Pango.EllipsizeMode.END)
         label.set_valign(Gtk.Align.CENTER)
         box.append(label)
+
+        if on_step:
+            up_btn = Gtk.Button.new_from_icon_name("go-up-symbolic")
+            up_btn.add_css_class("flat")
+            up_btn.set_valign(Gtk.Align.CENTER)
+            up_btn.set_size_request(34, 34)
+            up_btn.set_tooltip_text("Move up")
+            up_btn.connect("clicked", lambda _: on_step(name, -1))
+            box.append(up_btn)
+
+            down_btn = Gtk.Button.new_from_icon_name("go-down-symbolic")
+            down_btn.add_css_class("flat")
+            down_btn.set_valign(Gtk.Align.CENTER)
+            down_btn.set_size_request(34, 34)
+            down_btn.set_tooltip_text("Move down")
+            down_btn.connect("clicked", lambda _: on_step(name, 1))
+            box.append(down_btn)
 
         handle = Gtk.Image.new_from_icon_name("list-drag-handle-symbolic")
         handle.add_css_class("drag-handle")
