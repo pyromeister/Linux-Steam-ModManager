@@ -498,12 +498,12 @@ class ModManagerWindow(Adw.ApplicationWindow):
         self.mods_content_stack.set_visible_child_name("list")
 
         active_name = _prof.get_active(self._game_slug) if self._game_slug else None
-        profile_data = (_prof.get(self._game_slug, active_name) or {}) if active_name and active_name not in _prof.SYSTEM_PROFILES else {}
+        in_system = active_name in _prof.SYSTEM_PROFILES if active_name else True
+        profile_data = (_prof.get(self._game_slug, active_name) or {}) if not in_system else {}
         collection_mods = profile_data.get("collection_mods")
 
         if collection_mods:
             game_domain = profile_data.get("collection_game_domain", "")
-            installed_ids = self._get_installed_nexus_mod_ids(self._game_slug)
             # Build mod_id → installed mod dict for matching
             id_to_mod = {}
             for mod in mods:

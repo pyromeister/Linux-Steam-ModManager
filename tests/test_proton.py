@@ -1,6 +1,5 @@
 """Tests for lsmm.core.proton — Proton detection and launch command building."""
 
-from pathlib import Path
 from unittest.mock import patch
 
 from lsmm.core.proton import (

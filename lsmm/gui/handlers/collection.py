@@ -163,8 +163,6 @@ def rebuild_profiles_popover(window, popover):
 
 
 def on_import_collection(window, url: str):
-    from lsmm.gui.dialogs.collection import show_collection_import_dialog
-
     if not window.engine:
         window._toast("Select a game first")
         return
