@@ -123,12 +123,14 @@ def build_proton_launch_cmd(
     app_id: str,
     steam_root: Path,
     compat_data_path: Path,
-) -> tuple[list[str], dict[str, str]]:
-    """Return (cmd, env_vars) for launching loader_exe via Proton.
+) -> tuple[list[str], dict[str, str], str | None]:
+    """Return (cmd, env_vars, cwd) for launching loader_exe via Proton.
 
-    Inside Flatpak the env vars are baked into the flatpak-spawn command and
-    env_vars is empty. Outside Flatpak, caller merges env_vars into os.environ.
+    cwd is the working directory the caller should pass to subprocess.Popen.
+    Inside Flatpak env vars and cwd are baked into the flatpak-spawn command
+    (cwd returned as None); outside Flatpak the caller sets both.
     """
+    game_dir = str(loader_exe.parent)
     env_vars = {
         "STEAM_COMPAT_DATA_PATH": str(compat_data_path),
         "STEAM_COMPAT_CLIENT_INSTALL_PATH": str(steam_root),
@@ -138,6 +140,10 @@ def build_proton_launch_cmd(
 
     if _in_flatpak():
         env_flags = [f"--env={k}={v}" for k, v in env_vars.items()]
-        return ["flatpak-spawn", "--host"] + env_flags + base_cmd, {}
+        return (
+            ["flatpak-spawn", "--host", f"--directory={game_dir}"] + env_flags + base_cmd,
+            {},
+            None,
+        )
 
-    return base_cmd, env_vars
+    return base_cmd, env_vars, game_dir

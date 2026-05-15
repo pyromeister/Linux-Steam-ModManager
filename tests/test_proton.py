@@ -101,11 +101,12 @@ def test_build_proton_cmd_native(tmp_path):
     steam_root = tmp_path / "Steam"
     compat_data = tmp_path / "compatdata/22380"
     with patch("lsmm.core.proton._in_flatpak", return_value=False):
-        cmd, env = build_proton_launch_cmd(proton, loader, "22380", steam_root, compat_data)
+        cmd, env, cwd = build_proton_launch_cmd(proton, loader, "22380", steam_root, compat_data)
     assert cmd == [str(proton), "waitforexitandrun", str(loader)]
     assert env["STEAM_APP_ID"] == "22380"
     assert env["STEAM_COMPAT_DATA_PATH"] == str(compat_data)
     assert env["STEAM_COMPAT_CLIENT_INSTALL_PATH"] == str(steam_root)
+    assert cwd == str(tmp_path)
 
 
 def test_build_proton_cmd_flatpak(tmp_path):
@@ -114,9 +115,11 @@ def test_build_proton_cmd_flatpak(tmp_path):
     steam_root = tmp_path / "Steam"
     compat_data = tmp_path / "compatdata/22380"
     with patch("lsmm.core.proton._in_flatpak", return_value=True):
-        cmd, env = build_proton_launch_cmd(proton, loader, "22380", steam_root, compat_data)
+        cmd, env, cwd = build_proton_launch_cmd(proton, loader, "22380", steam_root, compat_data)
     assert cmd[0] == "flatpak-spawn"
     assert cmd[1] == "--host"
+    assert any(f"--directory={tmp_path}" in arg for arg in cmd)
     assert any("STEAM_APP_ID=22380" in arg for arg in cmd)
     assert str(proton) in cmd
     assert env == {}
+    assert cwd is None

@@ -589,11 +589,11 @@ class ModManagerWindow(Adw.ApplicationWindow):
                     proton = find_proton_for_game(steam_root, app_id)
                     if proton:
                         compat_data = paths.proton_prefix.parent
-                        cmd, extra_env = build_proton_launch_cmd(
+                        cmd, extra_env, cwd = build_proton_launch_cmd(
                             proton, game_root / loader_exe, app_id, steam_root, compat_data
                         )
                         try:
-                            subprocess.Popen(cmd, env={**os.environ, **extra_env})
+                            subprocess.Popen(cmd, env={**os.environ, **extra_env}, cwd=cwd)
                             self._toast("Launching with SE via Proton…")
                             return
                         except Exception:
