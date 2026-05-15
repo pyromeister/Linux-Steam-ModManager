@@ -6,6 +6,7 @@ Caches mod archives and backs up overwritten files for safe restore.
 """
 
 import json
+import logging
 import shutil
 import subprocess
 import tempfile
@@ -14,6 +15,8 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from lsmm.core.config import normalize_dir_name, ARCHIVES_DIR, BACKUPS_DIR, MANIFEST_PATH
+
+logger = logging.getLogger(__name__)
 
 _migration_done = False
 
@@ -59,6 +62,7 @@ def _safe_extract_zip(z: zipfile.ZipFile, dest: Path) -> None:
 def extract(archive_path: Path, dest: Path) -> None:
     """Extract archive_path into dest directory. Supports zip, 7z, rar."""
     suffix = archive_path.suffix.lower()
+    logger.debug("Extracting %s (format: %s) → %s", archive_path.name, suffix, dest)
     if suffix == ".zip":
         with zipfile.ZipFile(archive_path) as z:
             _safe_extract_zip(z, dest)
@@ -73,6 +77,7 @@ def extract(archive_path: Path, dest: Path) -> None:
             )
     else:
         raise ValueError(f"Unsupported archive format: {suffix}")
+    logger.debug("Extraction complete: %s", archive_path.name)
 
 
 def detect_source_root(extracted: Path) -> tuple[Path, str, list]:
@@ -90,18 +95,24 @@ def detect_source_root(extracted: Path) -> tuple[Path, str, list]:
         if inner.name.lower() == "data":
             double = inner / "Data"
             if double.is_dir():
+                logger.debug("Layout detected: double (Data/Data/)")
                 return double, "double", []
+            logger.debug("Layout detected: data (Data/ at root)")
             return inner, "data", []
         # Wrapper folder — look for Data/ inside
         data_sub = inner / "Data"
         if data_sub.is_dir():
             double = data_sub / "Data"
             if double.is_dir():
+                logger.debug("Layout detected: double via wrapper")
                 return double, "double", []
+            logger.debug("Layout detected: data via wrapper (%s/Data/)", inner.name)
             return data_sub, "data", []
         # Non-Data wrapper with no Data subfolder: copy wrapper + contents to dest
+        logger.debug("Layout detected: root (flat, wrapper=%s)", inner.name)
         return extracted, "root", []
 
+    logger.debug("Layout detected: root (flat, %d top-level items)", len(children))
     return extracted, "root", []
 
 
@@ -138,6 +149,7 @@ def install_files(
     backups: dict[str, str] = {}
 
     backup_base = BACKUPS_DIR / (game_slug or "unknown") / mod_name
+    logger.debug("Installing files: %s → %s", src_root, dest_root)
 
     for src_file in src_root.rglob("*"):
         if not src_file.is_file():
@@ -146,6 +158,7 @@ def install_files(
         dst = dest_root / rel
 
         if _should_skip(src_file):
+            logger.debug("Skipped: %s", rel)
             continue
 
         # Back up existing file before overwriting
@@ -154,11 +167,14 @@ def install_files(
             bak.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(dst, bak)
             backups[str(dst)] = str(bak)
+            logger.debug("Backed up: %s → %s", dst, bak)
 
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src_file, dst)
+        logger.debug("Installed: %s", rel)
         installed.append(dst)
 
+    logger.debug("install_files done: %d files installed, %d backed up", len(installed), len(backups))
     return installed, backups
 
 
@@ -289,6 +305,7 @@ def record_install(
         entry["staging_path"] = str(staging_path) if staging_path else None
     manifest[mod_name] = entry
     save_manifest(manifest)
+    logger.debug("Recorded install: mod=%s game=%s files=%d", mod_name, game_slug, len(installed_files))
 
 
 def remove_from_manifest(mod_name: str) -> dict:

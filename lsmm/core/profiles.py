@@ -11,6 +11,7 @@ from pathlib import Path
 PROFILES_DIR = Path.home() / ".config/linux-mod-manager/profiles"
 
 _ACTIVE_KEY = "_active"
+SYSTEM_PROFILES = ("Vanilla", "All Mods")
 
 
 def _path(game_slug: str) -> Path:
@@ -60,6 +61,8 @@ def save(game_slug: str, name: str, active_mods: list[str], load_order: list[str
 
 
 def delete(game_slug: str, name: str) -> None:
+    if name in SYSTEM_PROFILES:
+        raise ValueError(f"Cannot delete system profile: {name}")
     profiles = load_all(game_slug)
     if name in profiles:
         del profiles[name]
@@ -88,6 +91,10 @@ def get_active(game_slug: str) -> str | None:
 # ── Rename ────────────────────────────────────────────────────────────────────
 
 def rename(game_slug: str, old: str, new: str) -> None:
+    if old in SYSTEM_PROFILES:
+        raise ValueError(f"Cannot rename system profile: {old}")
+    if new in SYSTEM_PROFILES:
+        raise ValueError(f"Cannot use reserved name: {new}")
     raw = _load_raw(game_slug)
     profiles = {k: v for k, v in raw.items() if not k.startswith("_")}
     if old not in profiles:

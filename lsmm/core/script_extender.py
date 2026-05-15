@@ -47,7 +47,14 @@ class ScriptExtenderManager:
         return (self._game_root / loader).exists()
 
     def get_installed_version(self) -> str | None:
-        """Version from DLL filename (e.g. skse64_2_02_06.dll → '2.02.06'), config fallback."""
+        """Version from config (written on install), falling back to DLL filename heuristic.
+
+        Config is preferred because some SEs (e.g. NVSE) name their DLLs after the
+        game version they target (nvse_1_4.dll = game v1.4), not the SE version.
+        """
+        config_ver = get_se_installed_version(self._slug) if self._slug else None
+        if config_ver:
+            return config_ver
         prefix = self._se.get("asset_prefix", "")
         if prefix and self._game_root.exists():
             loader = self._se.get("loader_exe", "")
@@ -57,7 +64,7 @@ class ScriptExtenderManager:
                 stem = dll.stem[len(prefix):]
                 if stem and all(p.isdigit() for p in stem.split("_")):
                     return stem.replace("_", ".")
-        return get_se_installed_version(self._slug) if self._slug else None
+        return None
 
     def get_latest_info(self) -> tuple[str, str, str] | None:
         """Fetch latest GitHub release. Returns (version, download_url, filename) or None."""

@@ -24,8 +24,8 @@ modules:
   - name: p7zip
     buildsystem: simple
     build-commands:
-      - make -j${FLATPAK_BUILDER_N_JOBS:-1} 7z
-      - install -Dm755 bin/7z /app/bin/7z
+      - make -j${FLATPAK_BUILDER_N_JOBS:-1} 7za
+      - install -Dm755 bin/7za /app/bin/7z
     sources:
       - type: archive
         url: https://github.com/p7zip-project/p7zip/archive/refs/tags/v17.04.tar.gz
@@ -47,6 +47,8 @@ modules:
           /app/share/icons/hicolor/scalable/actions/list-drag-handle-symbolic.svg
       - install -Dm644 assets/hicolor/scalable/mimetypes/package-x-generic-symbolic.svg
           /app/share/icons/hicolor/scalable/mimetypes/package-x-generic-symbolic.svg
+      - install -Dm644 assets/style.css
+          /app/share/lsmm/style.css
     sources:
       - type: dir
         path: ..

@@ -107,8 +107,37 @@ def refresh_profiles_tab(win):
         except Exception:
             pass
 
+    for name in _prof.SYSTEM_PROFILES:
+        win._profiles_list.append(_make_system_profile_row(win, name, active_name, mods_overview))
+
     for name, data in all_profiles.items():
         win._profiles_list.append(_make_profile_row(win, name, data, active_name, slug, mods_overview))
+
+
+def _make_system_profile_row(win, name, active_name, mods_overview=None):
+    row = Adw.ActionRow()
+    row.set_title(name)
+    if name == "Vanilla":
+        row.set_subtitle("No mods active")
+    elif name == "All Mods":
+        total = mods_overview[1] if mods_overview else 0
+        row.set_subtitle(f"All {total} installed mod{'s' if total != 1 else ''}" if total else "All installed mods")
+
+    icon = Gtk.Image.new_from_icon_name("emblem-system-symbolic")
+    icon.add_css_class("dim-label")
+    row.add_prefix(icon)
+
+    if name == active_name:
+        check = Gtk.Image.new_from_icon_name("emblem-default-symbolic")
+        check.add_css_class("success")
+        row.add_prefix(check)
+
+    load_btn = Gtk.Button(label="Load")
+    load_btn.set_valign(Gtk.Align.CENTER)
+    load_btn.add_css_class("flat" if name == active_name else "suggested-action")
+    load_btn.connect("clicked", lambda _b, n=name: on_load_profile(win, n))
+    row.add_suffix(load_btn)
+    return row
 
 
 def _make_profile_row(win, name, data, active_name, slug, mods_overview=None):
@@ -186,9 +215,30 @@ def on_new_profile(win, _btn):
     dialog.present()
 
 
+def _apply_system_profile(win, name: str):
+    if not win.engine:
+        return
+    mods = win.engine.list_mods()
+    if name == "Vanilla":
+        for mod in mods:
+            if mod.get("active") and mod.get("kind") == "mod":
+                win.engine.disable_mod(mod["name"])
+    elif name == "All Mods":
+        for mod in mods:
+            if not mod.get("active") and mod.get("kind") == "mod":
+                win.engine.enable_mod(mod["name"])
+    _prof.set_active(win._game_slug, name)
+    win._refresh_mods()
+    win._refresh_load_order()
+    win._toast(f"Loaded: {name}")
+
+
 def on_load_profile(win, name: str):
-    from lsmm.gui.handlers.collection import apply_profile
-    apply_profile(win, win._game_slug, name)
+    if name in _prof.SYSTEM_PROFILES:
+        _apply_system_profile(win, name)
+    else:
+        from lsmm.gui.handlers.collection import apply_profile
+        apply_profile(win, win._game_slug, name)
     refresh_profiles_tab(win)
 
 

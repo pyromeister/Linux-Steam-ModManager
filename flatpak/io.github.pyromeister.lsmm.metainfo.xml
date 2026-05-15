@@ -38,11 +38,11 @@
   </provides>
 
   <releases>
-    <release version="0.3.0-alpha" date="2026-05-09">
+    <release version="0.3.0-alpha" date="2026-05-15">
       <description>
-        <p>Complete UI overhaul with GTK4/libadwaita redesign. Adds staging directory
-        system, mod profiles, tab-switch refresh, SMAPI tolerant parsing, and
-        app update checker.</p>
+        <p>UI overhaul, Flatpak fixes, system profiles (Vanilla / All Mods), NVSE
+        support, script extender install/version improvements, modpack collection
+        view in Mods tab, compact mod row layout, and settings improvements.</p>
       </description>
     </release>
     <release version="0.1.1" date="2026-05-07">

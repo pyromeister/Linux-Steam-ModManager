@@ -35,7 +35,9 @@ def _setup_logging() -> None:
     LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
     handler = RotatingFileHandler(LOG_PATH, maxBytes=2 * 1024 * 1024, backupCount=3)
     handler.setFormatter(logging.Formatter("%(asctime)s %(name)s %(levelname)s %(message)s"))
-    logging.basicConfig(level=logging.INFO, handlers=[handler])
+    logging.basicConfig(level=logging.DEBUG, handlers=[handler])
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
+    logging.getLogger("requests").setLevel(logging.WARNING)
 
 
 # ── Application ───────────────────────────────────────────────────────────────
@@ -54,16 +56,20 @@ class ModManagerApp(Adw.Application):
     def _on_activate(self, app):
         Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.PREFER_DARK)
         assets_dir = ROOT / "assets"
+        css_file = assets_dir / "style.css"
+        if not css_file.exists():
+            css_file = Path("/app/share/lsmm/style.css")
         if assets_dir.exists():
             display = Gdk.Display.get_default()
             Gtk.IconTheme.get_for_display(display).add_search_path(str(assets_dir))
-            css_file = assets_dir / "style.css"
-            if css_file.exists():
-                provider = Gtk.CssProvider()
-                provider.load_from_path(str(css_file))
-                Gtk.StyleContext.add_provider_for_display(
-                    display, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
-                )
+        else:
+            display = Gdk.Display.get_default()
+        if css_file.exists():
+            provider = Gtk.CssProvider()
+            provider.load_from_path(str(css_file))
+            Gtk.StyleContext.add_provider_for_display(
+                display, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+            )
         if self._window is None:
             self._window = ModManagerWindow(app, pending_nxm=self._pending_nxm_for_activate)
             self._pending_nxm_for_activate = None

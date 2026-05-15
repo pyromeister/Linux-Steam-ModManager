@@ -212,7 +212,13 @@ def on_import_collection(window, url: str):
                   collection_mods=collection_mods,
                   collection_game_domain=game_domain)
         mod_count = len(collection_mods) if collection_mods else 0
-        GLib.idle_add(show_collection_import_dialog, window, collection_name, mod_count)
+        GLib.idle_add(window._refresh_profiles_tab)
+        if collection_mods:
+            from lsmm.gui.dialogs.collection import show_collection_mods_dialog
+            GLib.idle_add(show_collection_mods_dialog, window, collection_name, slug)
+        else:
+            from lsmm.gui.dialogs.collection import show_collection_import_dialog
+            GLib.idle_add(show_collection_import_dialog, window, collection_name, mod_count)
 
     threading.Thread(target=run, daemon=True).start()
 

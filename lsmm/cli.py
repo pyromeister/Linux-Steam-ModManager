@@ -32,7 +32,9 @@ def _setup_logging() -> None:
     LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
     handler = RotatingFileHandler(LOG_PATH, maxBytes=2 * 1024 * 1024, backupCount=3)
     handler.setFormatter(logging.Formatter("%(asctime)s %(name)s %(levelname)s %(message)s"))
-    logging.basicConfig(level=logging.INFO, handlers=[handler])
+    logging.basicConfig(level=logging.DEBUG, handlers=[handler])
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
+    logging.getLogger("requests").setLevel(logging.WARNING)
 
 
 def _load_engine(game: str):

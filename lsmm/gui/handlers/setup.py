@@ -1,10 +1,13 @@
 """BepInEx framework and Script Extender setup handlers."""
 
+import logging
 import threading
 
 import gi
 gi.require_version("Adw", "1")
 from gi.repository import Adw, GLib
+
+logger = logging.getLogger(__name__)
 
 
 def handle_setup_btn(win):
@@ -98,6 +101,7 @@ def do_setup_bepinex(win):
             GLib.idle_add(show_bepinex_launch_dialog, win)
             GLib.idle_add(win._toast, f"BepInEx {version} installed successfully")
         except Exception as e:
+            logger.error("BepInEx install failed: %s", e, exc_info=True)
             GLib.idle_add(win._progress_done)
             GLib.idle_add(win.status_label.set_text, "Ready")
             GLib.idle_add(win._toast, f"BepInEx install failed: {e}")
@@ -184,8 +188,11 @@ def _do_download_se(win, se_name: str):
             win.engine.download_script_extender(on_progress=on_progress)
             GLib.idle_add(win._progress_done)
             GLib.idle_add(win.status_label.set_text, "Ready")
+            GLib.idle_add(win._refresh_mod_engine_tab)
+            GLib.idle_add(win._update_setup_btn)
             GLib.idle_add(_finish_se_setup, win)
         except Exception as e:
+            logger.error("%s download failed: %s", se_name, e, exc_info=True)
             GLib.idle_add(win._progress_done)
             GLib.idle_add(win.status_label.set_text, "Ready")
             GLib.idle_add(win._toast, f"{se_name} download failed: {e}")
@@ -197,6 +204,7 @@ def _finish_se_setup(win):
     try:
         script_path = win.engine.setup_script_extender()
     except Exception as e:
+        logger.error("SE launch script setup failed: %s", e, exc_info=True)
         win._toast(f"Setup failed: {e}")
         return
 

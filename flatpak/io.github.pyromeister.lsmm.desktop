@@ -7,5 +7,5 @@ Icon=io.github.pyromeister.lsmm
 Type=Application
 Categories=Game;Utility;
 MimeType=x-scheme-handler/nxm;
-StartupWMClass=lsmm
+StartupWMClass=io.github.pyromeister.lsmm
 X-Flatpak=io.github.pyromeister.lsmm

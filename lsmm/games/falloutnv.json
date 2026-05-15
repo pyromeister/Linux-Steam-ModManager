@@ -9,6 +9,8 @@
   "script_extender": {
     "name": "NVSE",
     "loader_exe": "nvse_loader.exe",
-    "plugins_dir": "Data/NVSE/Plugins"
+    "plugins_dir": "Data/NVSE/Plugins",
+    "github_repo": "xNVSE/NVSE",
+    "asset_prefix": "nvse_"
   }
 }

@@ -19,6 +19,17 @@ def build_settings_panel(window) -> Adw.PreferencesPage:
     return page
 
 
+def open_settings_dialog(window) -> None:
+    dialog = Adw.PreferencesDialog()
+    dialog.set_title("Settings")
+    page = Adw.PreferencesPage()
+    page.set_title("Settings")
+    page.set_icon_name("preferences-system-symbolic")
+    _populate_settings_page(page, window, dialog=dialog)
+    dialog.add(page)
+    dialog.present(window)
+
+
 def _populate_settings_page(page, window, dialog=None):
     # ── App ───────────────────────────────────────────────────────────────────
     app_group = Adw.PreferencesGroup()
@@ -44,6 +55,11 @@ def _populate_settings_page(page, window, dialog=None):
     nexus_group = Adw.PreferencesGroup()
     nexus_group.set_title("Nexus Mods")
     page.add(nexus_group)
+
+    nexus_group.set_description(
+        "Required for modpack import (collection data) and automatic mod identification (MD5 lookup). "
+        "Not required for basic install/uninstall."
+    )
 
     api_row = Adw.PasswordEntryRow()
     api_row.set_title("API Key")

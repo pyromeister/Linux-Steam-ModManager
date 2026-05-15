@@ -20,7 +20,7 @@ from lsmm.core.utils import (
     available_games as _available_games,
     find_game_by_nexus_domain as _find_game_by_nexus_domain,
 )
-from lsmm.gui.widgets.mod_row import ModRow
+from lsmm.gui.widgets.mod_row import ModRow, PendingModRow
 from lsmm.gui.handlers.install import install_batch, do_uninstall
 from lsmm.gui.handlers.nxm import do_nxm_import
 from lsmm.gui.handlers.updates import do_check_updates
@@ -35,7 +35,7 @@ from lsmm.gui.dialogs.api_key import show_api_key_dialog, show_nxm_api_key_hint
 from lsmm.gui.dialogs.steam_path import show_steam_path_dialog
 from lsmm.gui.dialogs.first_run import show_first_run_wizard
 from lsmm.gui.dialogs.help import build_help_panel
-from lsmm.gui.dialogs.settings import build_settings_panel
+from lsmm.gui.dialogs.settings import build_settings_panel, open_settings_dialog
 from lsmm.gui.dialogs.update_snooze import show_update_snooze_dialog
 
 
@@ -92,7 +92,7 @@ class ModManagerWindow(Adw.ApplicationWindow):
         settings_action = Gio.SimpleAction.new("open-settings", None)
         settings_action.connect(
             "activate",
-            lambda a, p: (self._close_games_flyout(), self._content_stack.set_visible_child_name("settings")),
+            lambda a, p: (self._close_games_flyout(), open_settings_dialog(self)),
         )
         self.add_action(settings_action)
         self.get_application().set_accels_for_action("win.open-settings", ["<Ctrl>comma"])
@@ -131,7 +131,7 @@ class ModManagerWindow(Adw.ApplicationWindow):
         settings_btn.set_size_request(-1, 64)
         settings_btn.connect("clicked", lambda _: (
             self._close_games_flyout(),
-            self._content_stack.set_visible_child_name("settings"),
+            open_settings_dialog(self),
         ))
         nav_rail.append(settings_btn)
 
@@ -484,14 +484,56 @@ class ModManagerWindow(Adw.ApplicationWindow):
             self.mods_content_stack.set_visible_child_name("empty")
             return
 
-        if not mods:
+        # Check for pending collection mods even if no installed mods yet
+        active_name_check = _prof.get_active(self._game_slug) if self._game_slug else None
+        has_collection = bool(
+            active_name_check
+            and active_name_check not in _prof.SYSTEM_PROFILES
+            and (_prof.get(self._game_slug, active_name_check) or {}).get("collection_mods")
+        )
+        if not mods and not has_collection:
             self.mods_content_stack.set_visible_child_name("empty")
             return
 
         self.mods_content_stack.set_visible_child_name("list")
-        for mod in sorted(mods, key=lambda m: m["name"].lower()):
-            row = ModRow(mod, self._on_toggle_mod)
-            self.mods_list.append(row)
+
+        active_name = _prof.get_active(self._game_slug) if self._game_slug else None
+        profile_data = (_prof.get(self._game_slug, active_name) or {}) if active_name and active_name not in _prof.SYSTEM_PROFILES else {}
+        collection_mods = profile_data.get("collection_mods")
+
+        if collection_mods:
+            game_domain = profile_data.get("collection_game_domain", "")
+            installed_ids = self._get_installed_nexus_mod_ids(self._game_slug)
+            # Build mod_id → installed mod dict for matching
+            id_to_mod = {}
+            for mod in mods:
+                nexus = mod.get("nexus") or {}
+                mid = nexus.get("mod_id")
+                if mid:
+                    id_to_mod[int(mid)] = mod
+                # also try filename-based ID
+                import re as _re
+                hit = _re.search(r"-(\d{4,})-\d+(?:-\d+)*$", mod["name"])
+                if hit:
+                    id_to_mod.setdefault(int(hit.group(1)), mod)
+
+            shown_mod_names: set[str] = set()
+            for col_mod in sorted(collection_mods, key=lambda m: m["name"].lower()):
+                mid = col_mod.get("mod_id")
+                matched = id_to_mod.get(int(mid)) if mid else None
+                if matched:
+                    shown_mod_names.add(matched["name"])
+                    self.mods_list.append(ModRow(matched, self._on_toggle_mod))
+                else:
+                    self.mods_list.append(PendingModRow(col_mod, game_domain))
+
+            # Extra installed mods not in collection
+            for mod in sorted(mods, key=lambda m: m["name"].lower()):
+                if mod["name"] not in shown_mod_names:
+                    self.mods_list.append(ModRow(mod, self._on_toggle_mod))
+        else:
+            for mod in sorted(mods, key=lambda m: m["name"].lower()):
+                self.mods_list.append(ModRow(mod, self._on_toggle_mod))
 
         self._update_active_set_label()
 
@@ -515,9 +557,9 @@ class ModManagerWindow(Adw.ApplicationWindow):
         query = self.mods_search.get_text().strip().lower()
         if not query:
             return True
-        if not isinstance(row, ModRow):
-            return True
-        return query in row.mod_name.lower()
+        if isinstance(row, (ModRow, PendingModRow)):
+            return query in row.mod_name.lower()
+        return True
 
     def _on_mods_search_changed(self, _entry):
         self.mods_list.invalidate_filter()
@@ -814,11 +856,11 @@ class ModManagerWindow(Adw.ApplicationWindow):
             se_name = se.get("name", "Script Extender")
             paths = getattr(self.engine, "paths", None)
             se_installed = bool(paths and paths.se_loader and paths.se_loader.exists())
-            self.setup_btn.set_label(f"{se_name} ✓" if se_installed else se_name)
+            self.setup_btn.set_label(f"{se_name} ✓" if se_installed else f"Install {se_name}")
             self.setup_btn.set_tooltip_text(
                 f"{se_name} is installed — click to (re)create the Steam launch wrapper"
                 if se_installed else
-                f"Download {se_name} and extract to the game folder, then click here to create the launch wrapper"
+                f"Download and install {se_name} into the game folder"
             )
         else:
             self.setup_btn.set_label("Script Extender")

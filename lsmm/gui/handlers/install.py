@@ -46,27 +46,36 @@ def ask_fomod(window, config) -> list | None:
 
 def _install_one(window, path, engine) -> bool:
     """Install a single archive. Returns True on success, False on failure."""
+    logger.debug("_install_one: %s", path.name)
     config = detect_fomod(path)
     fomod_files = None
     if config is not None:
+        logger.debug("FOMOD detected for %s — showing dialog", path.name)
         fomod_files = ask_fomod(window, config)
         if fomod_files is None:
+            logger.debug("FOMOD dialog cancelled for %s", path.name)
             return False
 
     try:
         engine.install(path, fomod_files=fomod_files)
+        logger.debug("Install succeeded: %s", path.name)
         return True
     except ConflictError as ce:
+        logger.debug("Conflict for %s: %d files — asking user", path.name, len(ce.conflicts))
         confirmed = ask_conflict(window, ce.conflicts, path.name)
         if confirmed:
             try:
                 engine.install(path, force=True, fomod_files=fomod_files)
+                logger.debug("Force-install succeeded: %s", path.name)
                 return True
             except Exception as e:
+                logger.error("Force-install failed: %s — %s", path.name, e)
                 _glib().idle_add(window._toast, f"Failed: {path.name} — {e}")
                 return False
+        logger.debug("Conflict not resolved — skipping %s", path.name)
         return False
     except Exception as e:
+        logger.error("Install failed: %s — %s", path.name, e)
         _glib().idle_add(window._toast, f"Failed: {path.name} — {e}")
         return False
 
@@ -119,9 +128,11 @@ def install_batch(window, paths: list):
     window._installing = True
 
     def run():
+        logger.debug("install_batch: %d archive(s)", len(paths))
         _glib().idle_add(window._progress_start_pulse)
         succeeded = 0
         for i, path in enumerate(paths):
+            logger.debug("Starting install %d/%d: %s", i + 1, len(paths), path.name)
             _glib().idle_add(
                 window.status_label.set_text,
                 f"Installing {path.name} ({i + 1}/{len(paths)})..."
@@ -134,7 +145,10 @@ def install_batch(window, paths: list):
                     args=(window, path, mod_name),
                     daemon=True,
                 ).start()
+            else:
+                logger.debug("Install skipped/failed: %s", path.name)
 
+        logger.debug("install_batch done: %d/%d succeeded", succeeded, len(paths))
         window._installing = False
         _glib().idle_add(window._progress_done)
         _glib().idle_add(window.status_label.set_text, "Ready")
