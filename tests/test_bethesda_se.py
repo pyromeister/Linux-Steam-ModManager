@@ -211,7 +211,7 @@ def test_setup_script_extender_creates_launch_script(eng):
     assert script_path.exists()
     content = script_path.read_text()
     assert "sfse_loader.exe" in content
-    assert "Starfield.exe" in content
+    assert "waitforexitandrun" in content
 
 
 def test_setup_script_extender_is_executable(eng):
