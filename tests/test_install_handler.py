@@ -27,7 +27,7 @@ def test_non_fomod_archive_installs_normally(tmp_path):
     engine = _engine()
     with patch("lsmm.gui.handlers.install.detect_fomod", return_value=None):
         _install_one(_window(), path, engine)
-    engine.install.assert_called_once_with(path, fomod_files=None)
+    engine.install.assert_called_once_with(path, fomod_files=None, staging=True)
 
 
 # ── ISC-37: detect_fomod called before engine.install ─────────────────────────
@@ -52,7 +52,7 @@ def test_fomod_config_passed_to_engine_install(tmp_path):
     with patch("lsmm.gui.handlers.install.detect_fomod", return_value=fake_config), \
          patch("lsmm.gui.handlers.install.ask_fomod", return_value=fake_files):
         _install_one(_window(), path, engine)
-    engine.install.assert_called_once_with(path, fomod_files=fake_files)
+    engine.install.assert_called_once_with(path, fomod_files=fake_files, staging=True)
 
 
 # ── ISC-38: cancelled FOMOD (None) skips engine.install ──────────────────────

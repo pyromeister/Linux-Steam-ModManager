@@ -571,7 +571,34 @@ class ModManagerWindow(Adw.ApplicationWindow):
         if not app_id:
             self._toast("No Steam App ID for this game")
             return
+
+        import os
         import subprocess
+
+        paths = getattr(self.engine, "paths", None)
+        se_cfg = self.engine.profile.get("script_extender", {})
+        loader_exe = se_cfg.get("loader_exe") if se_cfg else None
+
+        if paths and loader_exe:
+            game_root = getattr(paths, "game_root", None)
+            if game_root and (game_root / "se_launch.sh").exists():
+                from lsmm.core.config import get_steam_root
+                from lsmm.core.proton import find_proton_for_game, build_proton_launch_cmd
+                steam_root = get_steam_root()
+                if steam_root:
+                    proton = find_proton_for_game(steam_root, app_id)
+                    if proton:
+                        compat_data = paths.proton_prefix.parent
+                        cmd, extra_env = build_proton_launch_cmd(
+                            proton, game_root / loader_exe, app_id, steam_root, compat_data
+                        )
+                        try:
+                            subprocess.Popen(cmd, env={**os.environ, **extra_env})
+                            self._toast("Launching with SE via Proton…")
+                            return
+                        except Exception:
+                            pass  # fall through to steam://rungameid
+
         try:
             subprocess.Popen(["xdg-open", f"steam://rungameid/{app_id}"])
             self._toast("Launching via Steam…")

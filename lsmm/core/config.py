@@ -198,6 +198,67 @@ def find_library_for_app(app_id: str | int) -> Path | None:
     return steam_root  # game not found in any library — fall back to root
 
 
+def set_steam_launch_option(steam_root: Path, app_id: str | int, option: str) -> bool:
+    """Write LaunchOptions for app_id into every localconfig.vdf under steam_root/userdata/.
+    Returns True if at least one file was updated."""
+    userdata = steam_root / "userdata"
+    if not userdata.exists():
+        return False
+    updated = False
+    for lc in userdata.glob("*/config/localconfig.vdf"):
+        try:
+            original = lc.read_text(encoding="utf-8", errors="replace")
+            patched = _patch_launch_option(original, str(app_id), option)
+            if patched != original:
+                lc.write_text(patched, encoding="utf-8")
+                updated = True
+        except Exception:
+            pass
+    return updated
+
+
+def _patch_launch_option(content: str, app_id: str, option: str) -> str:
+    """Update or insert LaunchOptions for app_id inside a localconfig.vdf string."""
+    lines = content.splitlines(keepends=True)
+    out: list[str] = []
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        if line.strip() == f'"{app_id}"' and i + 1 < len(lines) and lines[i + 1].strip() == "{":
+            out.append(line)        # "app_id"
+            out.append(lines[i + 1])  # {
+            i += 2
+            depth = 1
+            lo_done = False
+            while i < len(lines) and depth > 0:
+                ln = lines[i]
+                stripped = ln.strip()
+                if stripped == "{":
+                    depth += 1
+                elif stripped == "}":
+                    depth -= 1
+                    if depth == 0:
+                        if not lo_done:
+                            indent = ln[: len(ln) - len(ln.lstrip())]
+                            out.append(f'{indent}\t"LaunchOptions"\t\t"{option}"\n')
+                        out.append(ln)
+                        i += 1
+                        break
+                if depth > 0:
+                    if '"LaunchOptions"' in stripped and not lo_done:
+                        indent = ln[: len(ln) - len(ln.lstrip())]
+                        out.append(f'{indent}"LaunchOptions"\t\t"{option}"\n')
+                        lo_done = True
+                        i += 1
+                        continue
+                    out.append(ln)
+                i += 1
+            continue
+        out.append(line)
+        i += 1
+    return "".join(out)
+
+
 def load_profile(game: str) -> dict:
     """Load game profile — user override (~/.config/linux-mod-manager/games/) takes precedence."""
     user_path = USER_GAMES_DIR / f"{game}.json"

@@ -1,13 +1,10 @@
 """LOOT integration — detect and invoke LOOT for Bethesda load order sorting."""
 
-import os
 import shutil
 import subprocess
 from pathlib import Path
 
-
-def _in_flatpak() -> bool:
-    return os.environ.get("FLATPAK_ID") is not None or Path("/.flatpak-info").exists()
+from lsmm.core.proton import _in_flatpak
 
 
 _LOOT_FLATPAK_ID = "io.github.loot.loot"

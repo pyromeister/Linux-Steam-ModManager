@@ -240,9 +240,15 @@ class BethesdaEngine(BaseEngine):
     # ── Activation ───────────────────────────────────────────────────────────
 
     def enable_mod(self, mod_name: str) -> None:
+        entry = load_manifest().get(mod_name, {})
+        if entry.get("staged"):
+            deploy_mod(self.profile.get("slug"), mod_name, self.paths.data_dir)
         self._set_mod_active(mod_name, True)
 
     def disable_mod(self, mod_name: str) -> None:
+        entry = load_manifest().get(mod_name, {})
+        if entry.get("staged"):
+            undeploy_mod(self.profile.get("slug"), mod_name, self.paths.data_dir)
         self._set_mod_active(mod_name, False)
 
     def _set_mod_active(self, mod_name: str, active: bool) -> None:

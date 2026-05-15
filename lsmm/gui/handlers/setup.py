@@ -210,6 +210,23 @@ def _finish_se_setup(win):
 
     launch_option = f'"{script_path}" %command%'
 
+    # Auto-write launch option to localconfig.vdf
+    from lsmm.core.config import get_steam_root, set_steam_launch_option
+    app_id = win.engine.profile.get("steam_app_id")
+    auto_set = False
+    if app_id:
+        steam_root = get_steam_root()
+        if steam_root:
+            try:
+                auto_set = set_steam_launch_option(steam_root, app_id, launch_option)
+            except Exception as e:
+                logger.warning("Could not auto-set Steam launch option: %s", e)
+
+    if auto_set:
+        win._toast("Script extender ready — Steam launch option set automatically")
+        return
+
+    # Fallback: show dialog with manual instructions
     copied = False
     try:
         win.get_display().get_clipboard().set(launch_option)
@@ -217,16 +234,16 @@ def _finish_se_setup(win):
     except Exception:
         pass
 
-    clipboard_note = "\nThe text has been copied to your clipboard." if copied else ""
+    clipboard_note = "\nCopied to clipboard." if copied else ""
     dialog = Adw.MessageDialog(
         transient_for=win,
-        heading="Script Extender Setup Complete",
+        heading="Script Extender Setup — Manual Step Required",
         body=(
-            "A launch script was created. Add the following to your game's "
+            "A launch script was created but the Steam launch option could not be set automatically.\n\n"
+            "Add the following to your game's "
             "<b>Steam Launch Options</b> (right-click game → Properties → General):\n\n"
             f"<tt>{GLib.markup_escape_text(launch_option)}</tt>"
-            f"{clipboard_note}\n\n"
-            "Or use the <b>▶ Launch</b> button in this app to launch directly."
+            f"{clipboard_note}"
         ),
     )
     dialog.set_body_use_markup(True)

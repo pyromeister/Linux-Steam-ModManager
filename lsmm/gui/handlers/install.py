@@ -57,7 +57,7 @@ def _install_one(window, path, engine) -> bool:
             return False
 
     try:
-        engine.install(path, fomod_files=fomod_files)
+        engine.install(path, fomod_files=fomod_files, staging=True)
         logger.debug("Install succeeded: %s", path.name)
         return True
     except ConflictError as ce:
@@ -65,7 +65,7 @@ def _install_one(window, path, engine) -> bool:
         confirmed = ask_conflict(window, ce.conflicts, path.name)
         if confirmed:
             try:
-                engine.install(path, force=True, fomod_files=fomod_files)
+                engine.install(path, force=True, fomod_files=fomod_files, staging=True)
                 logger.debug("Force-install succeeded: %s", path.name)
                 return True
             except Exception as e:
