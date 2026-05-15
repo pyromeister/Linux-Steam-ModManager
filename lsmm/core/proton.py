@@ -58,19 +58,48 @@ def _parse_compat_tool_name(steam_root: Path, app_id: str) -> str | None:
     return None
 
 
+def _official_proton_candidates(tool_name: str) -> list[str]:
+    """Map Steam's internal Proton tool IDs to possible directory name globs.
+
+    Steam stores IDs like 'proton_9' or 'proton_experimental' in CompatToolMapping
+    rather than the actual steamapps/common directory name ('Proton 9.0 (Beta)').
+    Returns glob patterns (no wildcards needed — we use Path.glob on the parent).
+    """
+    if not tool_name.startswith("proton_"):
+        return []
+    suffix = tool_name[len("proton_"):]
+    if suffix.isdigit():
+        return [f"Proton {suffix}.*", f"Proton {suffix} *", f"Proton {suffix}"]
+    if suffix == "experimental":
+        return ["Proton - Experimental", "Proton Experimental"]
+    if suffix == "hotfix":
+        return ["Proton Hotfix"]
+    return []
+
+
 def _resolve_proton_dir(steam_root: Path, tool_name: str) -> Path | None:
     """Find the `proton` script for a given tool name."""
-    for lib in get_all_library_paths(steam_root):
-        candidate = lib / "steamapps/common" / tool_name / "proton"
+    all_libs = get_all_library_paths(steam_root) or [steam_root]
+    # steam_root may not always appear in libraryfolders.vdf
+    if steam_root not in all_libs:
+        all_libs = [steam_root, *all_libs]
+
+    for lib in all_libs:
+        common = lib / "steamapps/common"
+
+        # Exact match (community tools or old-style names)
+        candidate = common / tool_name / "proton"
         if candidate.exists():
             return candidate
 
-    # Steam root may not always appear in libraryfolders.vdf
-    candidate = steam_root / "steamapps/common" / tool_name / "proton"
-    if candidate.exists():
-        return candidate
+        # Official Proton: internal ID → glob directory name
+        for pattern in _official_proton_candidates(tool_name):
+            for d in sorted(common.glob(pattern), reverse=True):
+                p = d / "proton"
+                if p.exists():
+                    return p
 
-    # Community tools (GE-Proton, etc.) live in compatibilitytools.d
+    # Community tools (GE-Proton, etc.) in compatibilitytools.d
     compat_dir = steam_root / "compatibilitytools.d"
     if compat_dir.exists():
         candidate = compat_dir / tool_name / "proton"
