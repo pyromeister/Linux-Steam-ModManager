@@ -572,32 +572,24 @@ class ModManagerWindow(Adw.ApplicationWindow):
             self._toast("No Steam App ID for this game")
             return
 
-        import os
         import subprocess
 
+        # If a SE launch wrapper exists, write the launch option to localconfig.vdf
+        # so Steam uses nvse_loader.exe instead of the bare game exe.
+        # Steam re-reads launch options from localconfig.vdf on each game launch
+        # without requiring a restart.
         paths = getattr(self.engine, "paths", None)
-        se_cfg = self.engine.profile.get("script_extender", {})
-        loader_exe = se_cfg.get("loader_exe") if se_cfg else None
-
-        if paths and loader_exe:
+        if paths:
             game_root = getattr(paths, "game_root", None)
             if game_root and (game_root / "se_launch.sh").exists():
-                from lsmm.core.config import get_steam_root
-                from lsmm.core.proton import find_proton_for_game, build_proton_launch_cmd
+                from lsmm.core.config import get_steam_root, set_steam_launch_option
                 steam_root = get_steam_root()
                 if steam_root:
-                    proton = find_proton_for_game(steam_root, app_id)
-                    if proton:
-                        compat_data = paths.proton_prefix.parent
-                        cmd, extra_env, cwd = build_proton_launch_cmd(
-                            proton, game_root / loader_exe, app_id, steam_root, compat_data
-                        )
-                        try:
-                            subprocess.Popen(cmd, env={**os.environ, **extra_env}, cwd=cwd)
-                            self._toast("Launching with SE via Proton…")
-                            return
-                        except Exception:
-                            pass  # fall through to steam://rungameid
+                    launch_option = f'"{game_root / "se_launch.sh"}" %command%'
+                    try:
+                        set_steam_launch_option(steam_root, app_id, launch_option)
+                    except Exception:
+                        pass
 
         try:
             subprocess.Popen(["xdg-open", f"steam://rungameid/{app_id}"])
