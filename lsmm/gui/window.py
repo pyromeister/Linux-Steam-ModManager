@@ -573,24 +573,6 @@ class ModManagerWindow(Adw.ApplicationWindow):
             return
 
         import subprocess
-
-        # If a SE launch wrapper exists, write the launch option to localconfig.vdf
-        # so Steam uses nvse_loader.exe instead of the bare game exe.
-        # Steam re-reads launch options from localconfig.vdf on each game launch
-        # without requiring a restart.
-        paths = getattr(self.engine, "paths", None)
-        if paths:
-            game_root = getattr(paths, "game_root", None)
-            if game_root and (game_root / "se_launch.sh").exists():
-                from lsmm.core.config import get_steam_root, set_steam_launch_option
-                steam_root = get_steam_root()
-                if steam_root:
-                    launch_option = f'"{game_root / "se_launch.sh"}" %command%'
-                    try:
-                        set_steam_launch_option(steam_root, app_id, launch_option)
-                    except Exception:
-                        pass
-
         try:
             subprocess.Popen(["xdg-open", f"steam://rungameid/{app_id}"])
             self._toast("Launching via Steam…")
