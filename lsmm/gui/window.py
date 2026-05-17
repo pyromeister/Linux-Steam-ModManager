@@ -97,6 +97,11 @@ class ModManagerWindow(Adw.ApplicationWindow):
         self.add_action(settings_action)
         self.get_application().set_accels_for_action("win.open-settings", ["<Ctrl>comma"])
 
+        search_action = Gio.SimpleAction.new("focus-mods-search", None)
+        search_action.connect("activate", lambda a, p: self.mods_search.grab_focus())
+        self.add_action(search_action)
+        self.get_application().set_accels_for_action("win.focus-mods-search", ["<Ctrl>f"])
+
         # ── Body: nav rail + separator + content overlay ──────────────────────
         body = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         body.set_vexpand(True)
@@ -174,6 +179,7 @@ class ModManagerWindow(Adw.ApplicationWindow):
         self._flyout_revealer.set_valign(Gtk.Align.FILL)
         self._flyout_revealer.set_child(games_panel)
         self._flyout_revealer.set_reveal_child(False)
+        self._flyout_revealer.set_can_target(False)
         content_overlay.add_overlay(self._flyout_revealer)
 
         content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
@@ -325,13 +331,17 @@ class ModManagerWindow(Adw.ApplicationWindow):
             self._open_games_flyout()
 
     def _open_games_flyout(self):
+        self._flyout_revealer.set_can_target(True)
         self._flyout_revealer.set_reveal_child(True)
         self._flyout_backdrop.set_visible(True)
-        GLib.idle_add(self._games_search.grab_focus)
+        self._games_search.set_focusable(True)
+        GLib.idle_add(lambda: self._games_search.grab_focus() and False)
 
     def _close_games_flyout(self):
         self._flyout_revealer.set_reveal_child(False)
         self._flyout_backdrop.set_visible(False)
+        self._games_search.set_focusable(False)
+        self._flyout_revealer.set_can_target(False)
 
     def _init_steam_path(self):
         self._refresh_games()
