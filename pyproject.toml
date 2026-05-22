@@ -34,6 +34,12 @@ include = ["lsmm*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+  "gui: tests requiring GTK/libadwaita and a display or Xvfb",
+  "integration: slower integration tests that exercise multiple subsystems",
+  "network: tests requiring external network access",
+  "manual: release/QA checks that are not run automatically",
+]
 
 [tool.coverage.run]
 parallel = false

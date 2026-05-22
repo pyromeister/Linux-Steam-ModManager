@@ -49,8 +49,9 @@ build-flatpak/
 .coverage.*
 htmlcov/
 
-# Dev-only docs folder (fully local, never in clone)
+# Dev-only docs folder (local by default; explicitly unignore repo docs below)
 docs/*
 !docs/game-profile-schema.md
+!docs/QA.md
 lsmm-roadmap.md
 backup/
