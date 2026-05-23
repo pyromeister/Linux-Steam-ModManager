@@ -1,6 +1,7 @@
 """ScriptExtenderManager — generic SE install/update/uninstall for any engine plugin."""
 
 import json
+import tempfile
 from pathlib import Path
 
 from lsmm.core import net
@@ -95,11 +96,19 @@ class ScriptExtenderManager:
         if info is None:
             raise RuntimeError("Could not fetch SE release info from GitHub")
         version, url, filename = info
-        tmp = Path(f"/tmp/{filename}")
-        download_file(url, tmp, on_progress=on_progress)
-        self._game_root.mkdir(parents=True, exist_ok=True)
-        extract(tmp, self._game_root)
-        tmp.unlink(missing_ok=True)
+        tmp_file = tempfile.NamedTemporaryFile(
+            prefix="lsmm_se_",
+            suffix=f"_{Path(filename).name}",
+            delete=False,
+        )
+        tmp = Path(tmp_file.name)
+        tmp_file.close()
+        try:
+            download_file(url, tmp, on_progress=on_progress)
+            self._game_root.mkdir(parents=True, exist_ok=True)
+            extract(tmp, self._game_root)
+        finally:
+            tmp.unlink(missing_ok=True)
         if self._slug:
             save_se_installed_version(self._slug, version.lstrip("v"))
 

@@ -49,13 +49,22 @@ def temp_extract_dir():
         shutil.rmtree(tmp, ignore_errors=True)
 
 
-def _safe_extract_zip(z: zipfile.ZipFile, dest: Path) -> None:
-    """Extract zip members only if they resolve inside dest (blocks path traversal)."""
+def safe_archive_member_path(dest: Path, member_name: str) -> Path:
+    """Return member path inside dest, or raise if it would escape dest."""
     dest = dest.resolve()
+    target = (dest / member_name).resolve()
+    if not target.is_relative_to(dest):
+        raise ValueError(f"Path traversal blocked: {member_name!r}")
+    return target
+
+
+def safe_extract_zip(z: zipfile.ZipFile, dest: Path) -> None:
+    """Extract zip members only if they resolve inside dest (blocks path traversal)."""
+    # Validate the whole archive first so a malicious later member cannot leave
+    # earlier files partially extracted before the error is raised.
     for member in z.infolist():
-        target = (dest / member.filename).resolve()
-        if not target.is_relative_to(dest):
-            raise ValueError(f"Path traversal blocked: {member.filename!r}")
+        safe_archive_member_path(dest, member.filename)
+    for member in z.infolist():
         z.extract(member, dest)
 
 
@@ -65,7 +74,7 @@ def extract(archive_path: Path, dest: Path) -> None:
     logger.debug("Extracting %s (format: %s) → %s", archive_path.name, suffix, dest)
     if suffix == ".zip":
         with zipfile.ZipFile(archive_path) as z:
-            _safe_extract_zip(z, dest)
+            safe_extract_zip(z, dest)
     elif suffix in (".7z", ".rar"):  # 7z strips leading / and .. by default; -snl prevents symlink attacks
         result = subprocess.run(
             ["7z", "x", str(archive_path), f"-o{dest}", "-y", "-snl"],

@@ -11,6 +11,7 @@ import logging
 import re
 import shutil
 import stat
+import tempfile
 import urllib.error
 import urllib.request
 import zipfile
@@ -29,6 +30,7 @@ from lsmm.core.installer import (
     load_manifest,
     record_install,
     remove_from_manifest,
+    safe_archive_member_path,
     temp_extract_dir,
 )
 
@@ -107,66 +109,75 @@ class ModFolderEngine(BaseEngine):
         if not asset:
             raise RuntimeError(f"No SMAPI installer asset found in release {version}")
 
-        tmp_zip = Path("/tmp/smapi_installer.zip")
-        dl_req = urllib.request.Request(
-            asset["browser_download_url"],
-            headers={"User-Agent": USER_AGENT},
+        tmp_file = tempfile.NamedTemporaryFile(
+            prefix="lsmm_smapi_",
+            suffix="_installer.zip",
+            delete=False,
         )
-        with urllib.request.urlopen(dl_req, timeout=120) as resp:
-            total = int(resp.headers.get("Content-Length", 0))
-            downloaded = 0
-            with tmp_zip.open("wb") as f:
-                while True:
-                    chunk = resp.read(65536)
-                    if not chunk:
-                        break
-                    f.write(chunk)
-                    downloaded += len(chunk)
-                    if on_progress:
-                        on_progress(downloaded, total)
+        tmp_zip = Path(tmp_file.name)
+        tmp_file.close()
 
-        with zipfile.ZipFile(tmp_zip) as outer:
-            dat_path = next(
-                m for m in outer.namelist()
-                if m.endswith(f"{installer_subdir}/{install_dat}")
+        try:
+            dl_req = urllib.request.Request(
+                asset["browser_download_url"],
+                headers={"User-Agent": USER_AGENT},
             )
-            inner_bytes = outer.read(dat_path)
+            with urllib.request.urlopen(dl_req, timeout=120) as resp:
+                total = int(resp.headers.get("Content-Length", 0))
+                downloaded = 0
+                with tmp_zip.open("wb") as f:
+                    while True:
+                        chunk = resp.read(65536)
+                        if not chunk:
+                            break
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        if on_progress:
+                            on_progress(downloaded, total)
 
-        self.game_root.mkdir(parents=True, exist_ok=True)
-        installed_files = []
-        with zipfile.ZipFile(io.BytesIO(inner_bytes)) as inner:
-            for member in inner.namelist():
-                if member.endswith("/"):
-                    continue
-                dest = self.game_root / member
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                dest.write_bytes(inner.read(member))
-                installed_files.append(dest)
+            with zipfile.ZipFile(tmp_zip) as outer:
+                dat_path = next(
+                    m for m in outer.namelist()
+                    if m.endswith(f"{installer_subdir}/{install_dat}")
+                )
+                inner_bytes = outer.read(dat_path)
 
-        for make_exec in [exe, smapi.get("launch_script", "")]:
-            if make_exec:
-                p = self.game_root / make_exec
-                if p.exists():
-                    p.chmod(p.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+            self.game_root.mkdir(parents=True, exist_ok=True)
+            installed_files = []
+            with zipfile.ZipFile(io.BytesIO(inner_bytes)) as inner:
+                for member in inner.namelist():
+                    if member.endswith("/"):
+                        continue
+                    dest = safe_archive_member_path(self.game_root, member)
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    dest.write_bytes(inner.read(member))
+                    installed_files.append(dest)
 
-        # SMAPI's install.dat doesn't include StardewModdingAPI.deps.json — the
-        # official installer generates it by copying the game's deps file. Without
-        # it the dotnet apphost falls into split/FX mode and shows help text instead
-        # of launching. Copy game deps.json so the host can resolve assemblies.
-        game_deps = self.game_root / "Stardew Valley.deps.json"
-        smapi_deps = self.game_root / f"{exe}.deps.json"
-        if game_deps.exists() and not smapi_deps.exists():
-            shutil.copy2(game_deps, smapi_deps)
-            installed_files.append(smapi_deps)
+            for make_exec in [exe, smapi.get("launch_script", "")]:
+                if make_exec:
+                    p = self.game_root / make_exec
+                    if p.exists():
+                        p.chmod(p.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
 
-        record_install(
-            "SMAPI",
-            tmp_zip,
-            installed_files,
-            game_slug=self.profile.get("slug"),
-            nexus_meta={"source": "github", "version": version},
-        )
-        tmp_zip.unlink(missing_ok=True)
+            # SMAPI's install.dat doesn't include StardewModdingAPI.deps.json — the
+            # official installer generates it by copying the game's deps file. Without
+            # it the dotnet apphost falls into split/FX mode and shows help text instead
+            # of launching. Copy game deps.json so the host can resolve assemblies.
+            game_deps = self.game_root / "Stardew Valley.deps.json"
+            smapi_deps = self.game_root / f"{exe}.deps.json"
+            if game_deps.exists() and not smapi_deps.exists():
+                shutil.copy2(game_deps, smapi_deps)
+                installed_files.append(smapi_deps)
+
+            record_install(
+                "SMAPI",
+                tmp_zip,
+                installed_files,
+                game_slug=self.profile.get("slug"),
+                nexus_meta={"source": "github", "version": version},
+            )
+        finally:
+            tmp_zip.unlink(missing_ok=True)
         return version
 
     def __init__(self, profile: dict):
