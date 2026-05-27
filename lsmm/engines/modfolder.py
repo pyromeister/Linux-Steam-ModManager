@@ -255,25 +255,30 @@ class ModFolderEngine(BaseEngine):
     # ── Uninstall ─────────────────────────────────────────────────────────────
 
     def uninstall(self, mod_name: str) -> None:
-        entry = remove_from_manifest(mod_name)
+        entry = load_manifest().get(mod_name)
         if not entry:
             logger.warning(f"Not installed: {mod_name}")
             return
 
+        failed: list[str] = []
         backups = entry.get("backups", {})
         for f_str in entry.get("files", []):
             f = Path(f_str)
             bak_str = backups.get(f_str)
-            if bak_str:
-                bak = Path(bak_str)
-                if bak.exists():
-                    f.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copy2(bak, f)
-                    bak.unlink()
-            else:
-                for candidate in (f, Path(str(f) + ".disabled")):
-                    if candidate.exists():
-                        candidate.unlink()
+            try:
+                if bak_str:
+                    bak = Path(bak_str)
+                    if bak.exists():
+                        f.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copy2(bak, f)
+                        bak.unlink()
+                else:
+                    for candidate in (f, Path(str(f) + ".disabled")):
+                        if candidate.exists():
+                            candidate.unlink()
+            except OSError as e:
+                logger.warning("Could not remove %s: %s", f, e)
+                failed.append(f_str)
             # Clean empty parent dirs up to mods_dir
             try:
                 parent = f.parent
@@ -283,7 +288,12 @@ class ModFolderEngine(BaseEngine):
             except Exception:
                 pass
 
-        logger.info(f"✓ Uninstalled: {mod_name}")
+        if failed:
+            logger.warning("Partial uninstall of %s — %d file(s) not removed: %s",
+                           mod_name, len(failed), failed)
+        else:
+            remove_from_manifest(mod_name)
+            logger.info(f"✓ Uninstalled: {mod_name}")
 
     # ── List ──────────────────────────────────────────────────────────────────
 

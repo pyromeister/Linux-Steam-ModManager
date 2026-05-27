@@ -156,18 +156,21 @@ class RimWorldEngine(BaseEngine):
     # ── Uninstall ─────────────────────────────────────────────────────────────
 
     def uninstall(self, mod_name: str) -> None:
-        entry = remove_from_manifest(mod_name)
+        entry = load_manifest().get(mod_name)
         if not entry:
             logger.warning(f"Not tracked: {mod_name}")
             return
 
-        # Remove mod folder — find it by checking which Mods/ subdir owns the files
+        failed: list[str] = []
         deleted_dirs: set[Path] = set()
         for f_str in entry.get("files", []):
             f = Path(f_str)
-            if f.exists():
-                f.unlink()
-            # Collect the top-level subdir under mods_dir
+            try:
+                if f.exists():
+                    f.unlink()
+            except OSError as e:
+                logger.warning("Could not remove %s: %s", f, e)
+                failed.append(f_str)
             try:
                 rel = f.relative_to(self.mods_dir)
                 top = self.mods_dir / rel.parts[0]
@@ -184,7 +187,12 @@ class RimWorldEngine(BaseEngine):
             about = _read_about(d) if d.exists() else {"packageId": d.name.lower()}
             self._deactivate_package(about["packageId"])
 
-        logger.info(f"✓ Uninstalled: {mod_name}")
+        if failed:
+            logger.warning("Partial uninstall of %s — %d file(s) not removed: %s",
+                           mod_name, len(failed), failed)
+        else:
+            remove_from_manifest(mod_name)
+            logger.info(f"✓ Uninstalled: {mod_name}")
 
     # ── List ─────────────────────────────────────────────────────────────────
 

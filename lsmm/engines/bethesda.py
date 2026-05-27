@@ -146,12 +146,13 @@ class BethesdaEngine(BaseEngine):
     # ── Uninstall ────────────────────────────────────────────────────────────
 
     def uninstall(self, mod_name: str) -> None:
-        entry = remove_from_manifest(mod_name)
+        entry = load_manifest().get(mod_name)
         if not entry:
             logger.warning(f"Not installed: {mod_name}")
             return
 
         plugins_file = PluginsFile.read(self.paths.plugins_txt)
+        failed: list[str] = []
 
         if entry.get("staged"):
             game_slug = self.profile.get("slug")
@@ -166,20 +167,37 @@ class BethesdaEngine(BaseEngine):
             for f_str in entry.get("files", []):
                 f = Path(f_str)
                 bak_str = backups.get(f_str)
-                if bak_str:
-                    bak = Path(bak_str)
-                    if bak.exists():
-                        f.parent.mkdir(parents=True, exist_ok=True)
-                        shutil.copy2(bak, f)
-                        bak.unlink()
-                else:
-                    if f.exists():
-                        f.unlink()
+                try:
+                    if bak_str:
+                        bak = Path(bak_str)
+                        if bak.exists():
+                            f.parent.mkdir(parents=True, exist_ok=True)
+                            shutil.copy2(bak, f)
+                            bak.unlink()
+                    else:
+                        if f.exists():
+                            f.unlink()
+                except OSError as e:
+                    logger.warning("Could not remove %s: %s", f, e)
+                    failed.append(f_str)
                 if f.suffix.lower() in PLUGIN_EXTENSIONS:
                     plugins_file.remove(f.name)
+                # Clean empty parent dirs up to data_dir
+                try:
+                    parent = f.parent
+                    while parent != self.paths.data_dir and parent.exists() and not any(parent.iterdir()):
+                        parent.rmdir()
+                        parent = parent.parent
+                except Exception:
+                    pass
 
         plugins_file.write()
-        logger.info(f"✓ Uninstalled: {mod_name}")
+        if failed:
+            logger.warning("Partial uninstall of %s — %d file(s) not removed: %s",
+                           mod_name, len(failed), failed)
+        else:
+            remove_from_manifest(mod_name)
+            logger.info(f"✓ Uninstalled: {mod_name}")
 
     # ── List ─────────────────────────────────────────────────────────────────
 
