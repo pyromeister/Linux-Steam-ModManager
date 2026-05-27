@@ -2,6 +2,7 @@
 
 import zipfile
 from pathlib import Path
+from unittest.mock import patch
 
 from lsmm.core.staging import (
     deploy_mod,
@@ -121,6 +122,68 @@ def test_undeploy_ignores_foreign_symlinks(tmp_path, monkeypatch):
     # Foreign symlink untouched
     assert foreign_link.is_symlink()
     assert foreign_link.resolve() == other_target.resolve()
+
+
+# ── ISC-30: undeploy removes copy-fallback files ─────────────────────────────
+
+def test_undeploy_removes_copy_fallback(tmp_path, monkeypatch):
+    staging_root = tmp_path / "staging"
+    monkeypatch.setattr("lsmm.core.staging.STAGING_ROOT", staging_root)
+
+    staging_dir = staging_root / "skyrim" / "CopyMod"
+    (staging_dir / "Textures").mkdir(parents=True)
+    (staging_dir / "Textures" / "tex.dds").write_bytes(b"texture data")
+
+    dest = tmp_path / "game" / "Data"
+    dest.mkdir(parents=True)
+
+    with patch("os.symlink", side_effect=OSError("cross-device")):
+        deployed = deploy_mod("skyrim", "CopyMod", dest)
+
+    dst = deployed[0]
+    assert dst.is_file() and not dst.is_symlink()
+
+    undeploy_mod("skyrim", "CopyMod", dest)
+    assert not dst.exists()
+
+
+def test_undeploy_copy_fallback_leaves_modified_file(tmp_path, monkeypatch):
+    staging_root = tmp_path / "staging"
+    monkeypatch.setattr("lsmm.core.staging.STAGING_ROOT", staging_root)
+
+    staging_dir = staging_root / "skyrim" / "CopyMod"
+    (staging_dir / "Textures").mkdir(parents=True)
+    (staging_dir / "Textures" / "tex.dds").write_bytes(b"original")
+
+    dest = tmp_path / "game" / "Data"
+    dest.mkdir(parents=True)
+
+    with patch("os.symlink", side_effect=OSError("cross-device")):
+        deployed = deploy_mod("skyrim", "CopyMod", dest)
+
+    # Game (or user) modified the file after deploy
+    deployed[0].write_bytes(b"modified by game")
+
+    undeploy_mod("skyrim", "CopyMod", dest)
+    assert deployed[0].exists()  # must not delete a modified file
+
+
+def test_undeploy_tolerates_already_deleted_copy_fallback(tmp_path, monkeypatch):
+    staging_root = tmp_path / "staging"
+    monkeypatch.setattr("lsmm.core.staging.STAGING_ROOT", staging_root)
+
+    staging_dir = staging_root / "skyrim" / "CopyMod"
+    (staging_dir / "Textures").mkdir(parents=True)
+    (staging_dir / "Textures" / "tex.dds").write_bytes(b"data")
+
+    dest = tmp_path / "game" / "Data"
+    dest.mkdir(parents=True)
+
+    with patch("os.symlink", side_effect=OSError("cross-device")):
+        deployed = deploy_mod("skyrim", "CopyMod", dest)
+
+    deployed[0].unlink()  # already gone before undeploy
+    undeploy_mod("skyrim", "CopyMod", dest)  # must not raise
 
 
 # ── staged_files returns relative paths ──────────────────────────────────────

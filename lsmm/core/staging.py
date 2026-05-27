@@ -94,24 +94,39 @@ def deploy_mod(game_slug: str, mod_name: str, dest_root: Path) -> list[Path]:
 
 def undeploy_mod(game_slug: str, mod_name: str, dest_root: Path) -> None:
     """
-    Remove only symlinks in dest_root that point into this mod's staging dir.
-    Does NOT touch plain files or symlinks to other locations.
+    Remove deployed files from dest_root for the given mod.
+    Handles both symlink-deploy and copy-fallback-deploy.
+    Does NOT remove copy-fallback files that have been modified since deploy.
     """
+    import filecmp
     staging_dir = get_mod_staging_dir(game_slug, mod_name).resolve()
     for rel in staged_files(game_slug, mod_name):
         dst = dest_root / rel
-        if not dst.is_symlink():
-            continue
-        try:
-            target = dst.resolve()
-        except OSError:
-            target = Path(os.readlink(dst)).resolve()
-        if target.is_relative_to(staging_dir):
-            dst.unlink()
+        removed = False
+        if dst.is_symlink():
             try:
-                dst.parent.rmdir()
+                target = dst.resolve()
             except OSError:
-                pass  # not empty — leave it
+                target = Path(os.readlink(dst)).resolve()
+            if target.is_relative_to(staging_dir):
+                dst.unlink()
+                removed = True
+        elif dst.is_file():
+            staged = staging_dir / rel
+            try:
+                if staged.exists() and filecmp.cmp(str(staged), str(dst), shallow=False):
+                    dst.unlink()
+                    removed = True
+            except OSError:
+                pass  # already gone or inaccessible — skip silently
+        if removed:
+            try:
+                parent = dst.parent
+                while parent != dest_root and parent.exists() and not any(parent.iterdir()):
+                    parent.rmdir()
+                    parent = parent.parent
+            except OSError:
+                pass
 
 
 def remove_staged_mod(game_slug: str, mod_name: str) -> None:
