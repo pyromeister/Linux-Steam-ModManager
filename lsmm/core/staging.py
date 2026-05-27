@@ -51,7 +51,9 @@ def stage_mod(
     return rel_paths
 
 
-def is_staged(game_slug: str, mod_name: str) -> bool:
+def is_staged(game_slug: str | None, mod_name: str) -> bool:
+    if not game_slug:
+        return False
     staging_dir = get_mod_staging_dir(game_slug, mod_name)
     if not staging_dir.exists():
         return False
@@ -134,3 +136,39 @@ def remove_staged_mod(game_slug: str, mod_name: str) -> None:
     staging_dir = get_mod_staging_dir(game_slug, mod_name)
     if staging_dir.exists():
         shutil.rmtree(staging_dir)
+
+
+def deploy_mod_folder(game_slug: str, mod_name: str, deploy_dir: Path) -> Path:
+    """
+    Create a folder symlink: deploy_dir/mod_name → staging/game/mod_name.
+    Replaces any existing symlink at that location.
+    Returns the deployed symlink path.
+    """
+    staging_dir = get_mod_staging_dir(game_slug, mod_name)
+    link = deploy_dir / mod_name
+    deploy_dir.mkdir(parents=True, exist_ok=True)
+    if link.is_symlink():
+        link.unlink()
+    os.symlink(staging_dir.resolve(), link)
+    return link
+
+
+def undeploy_mod_folder(game_slug: str, mod_name: str, deploy_dir: Path) -> None:
+    """Remove the folder symlink from deploy_dir. Does not touch the staging dir."""
+    link = deploy_dir / mod_name
+    if link.is_symlink():
+        link.unlink()
+
+
+def is_folder_deployed(game_slug: str | None, mod_name: str, deploy_dir: Path) -> bool:
+    """True when deploy_dir/mod_name is a symlink pointing to the correct staging dir."""
+    if not game_slug:
+        return False
+    link = deploy_dir / mod_name
+    if not link.is_symlink():
+        return False
+    staging_dir = get_mod_staging_dir(game_slug, mod_name)
+    try:
+        return link.resolve() == staging_dir.resolve()
+    except OSError:
+        return False

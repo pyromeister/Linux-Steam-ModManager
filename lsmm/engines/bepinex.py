@@ -31,6 +31,15 @@ from lsmm.core.installer import (
     safe_extract_zip,
     temp_extract_dir,
 )
+from lsmm.core.staging import (
+    deploy_mod_folder,
+    get_mod_staging_dir,
+    is_folder_deployed,
+    is_staged,
+    remove_staged_mod,
+    staged_files,
+    undeploy_mod_folder,
+)
 
 DLL_EXT = ".dll"
 BEPINEX_API = "https://api.github.com/repos/BepInEx/BepInEx/releases/latest"
@@ -44,6 +53,7 @@ class BepInExEngine(BaseEngine):
     has_script_extender = False
     has_activation_toggle = True
     has_framework_setup = True
+    supports_staging = True
     framework_name = "BepInEx"
 
     def __init__(self, profile: dict):
@@ -201,10 +211,8 @@ class BepInExEngine(BaseEngine):
     ) -> None:
         """
         Install a mod archive. Archive layout detection:
-          - Contains BepInEx/ at root → install relative to game_root
-            (handles mods that ship with BepInEx folder structure)
-          - Otherwise → install all files into BepInEx/plugins/
-            (handles flat DLL-only mods)
+          - Contains BepInEx/ at root → install relative to game_root (no staging)
+          - Otherwise → stage + folder symlink in BepInEx/plugins/
         Raises ConflictError if files conflict with another tracked mod (unless force=True).
         """
         name = mod_name or archive_path.stem
@@ -215,37 +223,79 @@ class BepInExEngine(BaseEngine):
 
             top_names = {p.name.lower(): p for p in tmp.iterdir()}
             if "bepinex" in top_names:
-                # Archive has BepInEx/ structure → install relative to game root
+                # Archive has BepInEx/ structure → install relative to game root (no staging)
                 dest_root = self.game_root
                 src_root = tmp
+
+                if not force:
+                    conflicts = check_conflicts(tmp, dest_root, load_manifest(), name)
+                    if conflicts:
+                        raise ConflictError(conflicts)
+
+                archive_cache = cache_archive(archive_path, game_slug)
+                self.plugins_dir.mkdir(parents=True, exist_ok=True)
+
+                logger.info("Installing files...")
+                installed, backups = install_files(src_root, dest_root, game_slug, name)
+                record_install(name, archive_path, installed, game_slug=game_slug,
+                               archive_cache=archive_cache, backups=backups,
+                               nexus_meta=nexus_meta)
             else:
-                # Flat archive (DLLs, subdirs) → everything into BepInEx/plugins/
-                dest_root = self.plugins_dir
+                # Flat archive → stage + folder symlink in plugins_dir
                 src_root = tmp
 
-            if not force:
-                conflicts = check_conflicts(tmp, dest_root, load_manifest(), name)
-                if conflicts:
-                    raise ConflictError(conflicts)
+                if not force:
+                    conflicts = check_conflicts(tmp, self.plugins_dir, load_manifest(), name)
+                    if conflicts:
+                        raise ConflictError(conflicts)
 
-            archive_cache = cache_archive(archive_path, game_slug)
-            self.plugins_dir.mkdir(parents=True, exist_ok=True)
+                archive_cache = cache_archive(archive_path, game_slug)
+                self.plugins_dir.mkdir(parents=True, exist_ok=True)
 
-            logger.info("Installing files...")
-            installed, backups = install_files(src_root, dest_root, game_slug, name)
+                if self.supports_staging:
+                    logger.info("Staging files...")
+                    staging_dir = get_mod_staging_dir(game_slug, name)
+                    if staging_dir.exists():
+                        shutil.rmtree(staging_dir)
+                    shutil.copytree(src_root, staging_dir)
 
-            record_install(name, archive_path, installed, game_slug=game_slug,
-                           archive_cache=archive_cache, backups=backups,
-                           nexus_meta=nexus_meta)
+                    old = self.plugins_dir / name
+                    if old.is_symlink():
+                        old.unlink()
+                    elif old.exists():
+                        shutil.rmtree(old)
+
+                    link = deploy_mod_folder(game_slug, name, self.plugins_dir)
+                    installed = [link / rel for rel in staged_files(game_slug, name)]
+                    record_install(name, archive_path, installed, game_slug=game_slug,
+                                   archive_cache=archive_cache, nexus_meta=nexus_meta)
+                else:
+                    logger.info("Installing files...")
+                    installed, backups = install_files(src_root, self.plugins_dir, game_slug, name)
+                    record_install(name, archive_path, installed, game_slug=game_slug,
+                                   archive_cache=archive_cache, backups=backups,
+                                   nexus_meta=nexus_meta)
 
         logger.info(f"✓ Installed: {name}")
 
     # ── Uninstall ────────────────────────────────────────────────────────────
 
     def uninstall(self, mod_name: str) -> None:
+        game_slug = self.profile.get("slug")
         entry = load_manifest().get(mod_name)
         if not entry:
             logger.warning(f"Not installed: {mod_name}")
+            return
+
+        if is_staged(game_slug, mod_name):
+            link = self.plugins_dir / mod_name
+            if link.is_symlink():
+                link.unlink()
+            elif link.is_dir():
+                shutil.rmtree(link)
+            remove_staged_mod(game_slug, mod_name)
+            remove_from_manifest(mod_name)
+            logger.info(f"✓ Uninstalled: {mod_name}")
             return
 
         failed: list[str] = []
@@ -299,14 +349,17 @@ class BepInExEngine(BaseEngine):
                 continue
 
             files = entry.get("files", [])
-            # Active = no tracked .dll is currently renamed to .dll.disabled
-            active = True
-            for f_str in files:
-                p = Path(f_str)
-                if p.suffix.lower() == DLL_EXT:
-                    tracked_dll_names.add(p.name)
-                    if not p.exists() and Path(f_str + ".disabled").exists():
-                        active = False
+            if is_staged(game_slug, name):
+                active = is_folder_deployed(game_slug, name, self.plugins_dir)
+            else:
+                # Active = no tracked .dll is currently renamed to .dll.disabled
+                active = True
+                for f_str in files:
+                    p = Path(f_str)
+                    if p.suffix.lower() == DLL_EXT:
+                        tracked_dll_names.add(p.name)
+                        if not p.exists() and Path(f_str + ".disabled").exists():
+                            active = False
 
             # BepInEx itself gets a special "framework" kind
             kind = "framework" if name == "BepInEx" else "mod"
@@ -336,6 +389,11 @@ class BepInExEngine(BaseEngine):
     # ── Activation ───────────────────────────────────────────────────────────
 
     def enable_mod(self, mod_name: str) -> None:
+        game_slug = self.profile.get("slug")
+        if is_staged(game_slug, mod_name):
+            deploy_mod_folder(game_slug, mod_name, self.plugins_dir)
+            logger.info(f"✓ enabled: {mod_name}")
+            return
         manifest = load_manifest()
         if mod_name not in manifest:
             # Untracked DLL — locate by stem in plugins_dir
@@ -351,6 +409,11 @@ class BepInExEngine(BaseEngine):
         logger.info(f"✓ enabled: {mod_name}")
 
     def disable_mod(self, mod_name: str) -> None:
+        game_slug = self.profile.get("slug")
+        if is_staged(game_slug, mod_name):
+            undeploy_mod_folder(game_slug, mod_name, self.plugins_dir)
+            logger.info(f"✓ disabled: {mod_name}")
+            return
         manifest = load_manifest()
         if mod_name not in manifest:
             # Untracked DLL — locate by stem in plugins_dir

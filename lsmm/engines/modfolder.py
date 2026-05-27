@@ -33,6 +33,15 @@ from lsmm.core.installer import (
     safe_archive_member_path,
     temp_extract_dir,
 )
+from lsmm.core.staging import (
+    deploy_mod_folder,
+    get_mod_staging_dir,
+    is_folder_deployed,
+    is_staged,
+    remove_staged_mod,
+    staged_files,
+    undeploy_mod_folder,
+)
 
 
 USER_AGENT = "linux-mod-manager/1.0"
@@ -60,6 +69,7 @@ class ModFolderEngine(BaseEngine):
     has_load_order = False
     has_script_extender = False
     has_activation_toggle = True
+    supports_staging = True
 
     @property
     def framework_name(self) -> str:
@@ -223,16 +233,11 @@ class ModFolderEngine(BaseEngine):
 
             tops = [p for p in tmp.iterdir()]
             if len(tops) == 1 and tops[0].is_dir():
-                # Single top-level folder — use the folder's real name as the
-                # manifest key so list_mods() shows the mod name, not the archive filename.
                 src_root = tops[0]
                 folder_name = mod_name or tops[0].name
-                dest = self.mods_dir / folder_name
                 name = folder_name
             else:
-                # Multiple entries — bundle everything into a named subfolder
                 src_root = tmp
-                dest = self.mods_dir / name
 
             if not force:
                 conflicts = check_conflicts(tmp, self.mods_dir, load_manifest(), name)
@@ -242,22 +247,59 @@ class ModFolderEngine(BaseEngine):
             archive_cache = cache_archive(archive_path, game_slug)
             self.mods_dir.mkdir(parents=True, exist_ok=True)
 
-            logger.info("Installing files...")
-            installed, backups = install_files(src_root, dest, game_slug, name)
-            record_install(
-                name, archive_path, installed,
-                game_slug=game_slug, archive_cache=archive_cache,
-                backups=backups, nexus_meta=nexus_meta,
-            )
+            if self.supports_staging:
+                logger.info("Staging files...")
+                staging_dir = get_mod_staging_dir(game_slug, name)
+                if staging_dir.exists():
+                    shutil.rmtree(staging_dir)
+                shutil.copytree(src_root, staging_dir)
+
+                # Remove any old install at this location before deploying
+                old = self.mods_dir / name
+                if old.is_symlink():
+                    old.unlink()
+                elif old.exists():
+                    shutil.rmtree(old)
+
+                link = deploy_mod_folder(game_slug, name, self.mods_dir)
+                installed = [link / rel for rel in staged_files(game_slug, name)]
+                record_install(
+                    name, archive_path, installed,
+                    game_slug=game_slug, archive_cache=archive_cache,
+                    nexus_meta=nexus_meta,
+                )
+            else:
+                dest = self.mods_dir / name
+                logger.info("Installing files...")
+                installed, backups = install_files(src_root, dest, game_slug, name)
+                record_install(
+                    name, archive_path, installed,
+                    game_slug=game_slug, archive_cache=archive_cache,
+                    backups=backups, nexus_meta=nexus_meta,
+                )
 
         logger.info(f"✓ Installed: {name}")
 
     # ── Uninstall ─────────────────────────────────────────────────────────────
 
     def uninstall(self, mod_name: str) -> None:
+        game_slug = self.profile.get("slug")
         entry = load_manifest().get(mod_name)
         if not entry:
             logger.warning(f"Not installed: {mod_name}")
+            return
+
+        if is_staged(game_slug, mod_name):
+            # Remove deployed symlink (active) or disabled folder (.disabled)
+            link = self.mods_dir / mod_name
+            for candidate in (link, Path(str(link) + ".disabled")):
+                if candidate.is_symlink():
+                    candidate.unlink()
+                elif candidate.is_dir():
+                    shutil.rmtree(candidate)
+            remove_staged_mod(game_slug, mod_name)
+            remove_from_manifest(mod_name)
+            logger.info(f"✓ Uninstalled: {mod_name}")
             return
 
         failed: list[str] = []
@@ -311,20 +353,22 @@ class ModFolderEngine(BaseEngine):
             # Skip entries whose files belong to a different game_root (stale override)
             if files and not any(Path(f).is_relative_to(self.game_root) for f in files):
                 continue
-            top = self._mod_top_dir(files)
-            if top is not None:
-                active = top.exists()
-                if not active and not Path(str(top) + ".disabled").exists():
-                    # Folder gone entirely — fall back to old per-file check
+            if is_staged(game_slug, mod_name):
+                active = is_folder_deployed(game_slug, mod_name, self.mods_dir)
+            else:
+                top = self._mod_top_dir(files)
+                if top is not None:
+                    active = top.exists()
+                    if not active and not Path(str(top) + ".disabled").exists():
+                        active = not any(
+                            not Path(f).exists() and Path(str(f) + ".disabled").exists()
+                            for f in files
+                        )
+                else:
                     active = not any(
                         not Path(f).exists() and Path(str(f) + ".disabled").exists()
                         for f in files
                     )
-            else:
-                active = not any(
-                    not Path(f).exists() and Path(str(f) + ".disabled").exists()
-                    for f in files
-                )
             tracked_names.add(mod_name)
             # Collect top-level installed dir names so the directory scan
             # doesn't show them as untracked duplicates.
@@ -394,6 +438,11 @@ class ModFolderEngine(BaseEngine):
         return None
 
     def enable_mod(self, mod_name: str) -> None:
+        game_slug = self.profile.get("slug")
+        if is_staged(game_slug, mod_name):
+            deploy_mod_folder(game_slug, mod_name, self.mods_dir)
+            logger.info(f"✓ enabled: {mod_name}")
+            return
         manifest = load_manifest()
         if mod_name in manifest:
             top = self._mod_top_dir(manifest[mod_name].get("files", []))
@@ -415,6 +464,11 @@ class ModFolderEngine(BaseEngine):
         logger.info(f"✓ enabled: {mod_name}")
 
     def disable_mod(self, mod_name: str) -> None:
+        game_slug = self.profile.get("slug")
+        if is_staged(game_slug, mod_name):
+            undeploy_mod_folder(game_slug, mod_name, self.mods_dir)
+            logger.info(f"✓ disabled: {mod_name}")
+            return
         manifest = load_manifest()
         if mod_name in manifest:
             top = self._mod_top_dir(manifest[mod_name].get("files", []))

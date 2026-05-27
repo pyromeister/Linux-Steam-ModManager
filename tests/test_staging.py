@@ -6,13 +6,16 @@ from unittest.mock import patch
 
 from lsmm.core.staging import (
     deploy_mod,
+    deploy_mod_folder,
     get_mod_staging_dir,
     get_staging_dir,
+    is_folder_deployed,
     is_staged,
     remove_staged_mod,
     stage_mod,
     staged_files,
     undeploy_mod,
+    undeploy_mod_folder,
 )
 
 
@@ -208,3 +211,58 @@ def test_path_helpers(monkeypatch, tmp_path):
     monkeypatch.setattr("lsmm.core.staging.STAGING_ROOT", root)
     assert get_staging_dir("mygame") == root / "mygame"
     assert get_mod_staging_dir("mygame", "mod") == root / "mygame" / "mod"
+
+
+# ── Folder-level staging ──────────────────────────────────────────────────────
+
+def test_deploy_mod_folder_creates_symlink(tmp_path, monkeypatch):
+    staging_root = tmp_path / "staging"
+    monkeypatch.setattr("lsmm.core.staging.STAGING_ROOT", staging_root)
+
+    staging_dir = staging_root / "game" / "MyMod"
+    (staging_dir / "sub").mkdir(parents=True)
+    (staging_dir / "sub" / "file.txt").write_text("content")
+
+    deploy_dir = tmp_path / "mods"
+    link = deploy_mod_folder("game", "MyMod", deploy_dir)
+
+    assert link == deploy_dir / "MyMod"
+    assert link.is_symlink()
+    assert link.resolve() == staging_dir.resolve()
+    assert (link / "sub" / "file.txt").read_text() == "content"
+
+
+def test_undeploy_mod_folder_removes_symlink_leaves_staging(tmp_path, monkeypatch):
+    staging_root = tmp_path / "staging"
+    monkeypatch.setattr("lsmm.core.staging.STAGING_ROOT", staging_root)
+
+    staging_dir = staging_root / "game" / "MyMod"
+    staging_dir.mkdir(parents=True)
+    (staging_dir / "manifest.json").write_text("{}")
+
+    deploy_dir = tmp_path / "mods"
+    deploy_mod_folder("game", "MyMod", deploy_dir)
+    assert (deploy_dir / "MyMod").is_symlink()
+
+    undeploy_mod_folder("game", "MyMod", deploy_dir)
+    assert not (deploy_dir / "MyMod").exists()
+    assert not (deploy_dir / "MyMod").is_symlink()
+    assert (staging_dir / "manifest.json").exists()  # staging untouched
+
+
+def test_is_folder_deployed_true_false(tmp_path, monkeypatch):
+    staging_root = tmp_path / "staging"
+    monkeypatch.setattr("lsmm.core.staging.STAGING_ROOT", staging_root)
+
+    staging_dir = staging_root / "game" / "Mod"
+    staging_dir.mkdir(parents=True)
+
+    deploy_dir = tmp_path / "mods"
+
+    assert not is_folder_deployed("game", "Mod", deploy_dir)
+
+    deploy_mod_folder("game", "Mod", deploy_dir)
+    assert is_folder_deployed("game", "Mod", deploy_dir)
+
+    undeploy_mod_folder("game", "Mod", deploy_dir)
+    assert not is_folder_deployed("game", "Mod", deploy_dir)

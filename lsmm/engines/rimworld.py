@@ -22,6 +22,13 @@ from lsmm.core.installer import (
     remove_from_manifest,
     temp_extract_dir,
 )
+from lsmm.core.staging import (
+    deploy_mod_folder,
+    get_mod_staging_dir,
+    is_staged,
+    remove_staged_mod,
+    staged_files,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +81,7 @@ class RimWorldEngine(BaseEngine):
     has_load_order = True
     has_script_extender = False
     has_activation_toggle = True
+    supports_staging = True
 
     def __init__(self, profile: dict):
         super().__init__(profile)
@@ -97,7 +105,7 @@ class RimWorldEngine(BaseEngine):
         fomod_files: list[tuple[str, str]] | None = None,
     ) -> None:
         """
-        Extract archive into game_root/Mods/.
+        Extract archive into game_root/Mods/ (via staging if supports_staging).
         Detects mod folder (looks for About/About.xml one level deep).
         Adds the mod's packageId to ModsConfig.xml activeMods.
         """
@@ -106,27 +114,44 @@ class RimWorldEngine(BaseEngine):
         with temp_extract_dir() as tmp:
             extract(archive_path, tmp)
 
-            # Find the actual mod root: either tmp itself or one subfolder inside
             mod_root = self._find_mod_root(tmp)
 
             about = _read_about(mod_root)
             package_id = about["packageId"]
             display_name = about["name"]
+            folder_name = mod_root.name
 
-            dest = self.mods_dir / mod_root.name
-            if dest.exists() and not force:
-                manifest = load_manifest()
-                if name in manifest:
-                    raise ConflictError([(mod_root.name, name)])
+            if not force:
+                dest = self.mods_dir / folder_name
+                if dest.exists():
+                    manifest = load_manifest()
+                    if name in manifest:
+                        raise ConflictError([(folder_name, name)])
 
             archive_cache = cache_archive(archive_path, game_slug)
             self.mods_dir.mkdir(parents=True, exist_ok=True)
 
-            if dest.exists():
-                shutil.rmtree(dest)
-            shutil.copytree(mod_root, dest)
+            if self.supports_staging:
+                staging_dir = get_mod_staging_dir(game_slug, name)
+                if staging_dir.exists():
+                    shutil.rmtree(staging_dir)
+                shutil.copytree(mod_root, staging_dir)
 
-            installed_files = [f for f in dest.rglob("*") if f.is_file()]
+                old = self.mods_dir / name
+                if old.is_symlink():
+                    old.unlink()
+                elif old.exists():
+                    shutil.rmtree(old)
+
+                link = deploy_mod_folder(game_slug, name, self.mods_dir)
+                installed_files = [link / rel for rel in staged_files(game_slug, name)]
+            else:
+                dest = self.mods_dir / folder_name
+                if dest.exists():
+                    shutil.rmtree(dest)
+                shutil.copytree(mod_root, dest)
+                installed_files = [f for f in dest.rglob("*") if f.is_file()]
+
             record_install(
                 name,
                 archive_path,
@@ -156,9 +181,27 @@ class RimWorldEngine(BaseEngine):
     # ── Uninstall ─────────────────────────────────────────────────────────────
 
     def uninstall(self, mod_name: str) -> None:
+        game_slug = self._game_slug()
         entry = load_manifest().get(mod_name)
         if not entry:
             logger.warning(f"Not tracked: {mod_name}")
+            return
+
+        if is_staged(game_slug, mod_name):
+            link = self.mods_dir / mod_name
+            # Get packageId before removing
+            pkg_id = None
+            if link.exists():
+                pkg_id = _read_about(link)["packageId"]
+            if link.is_symlink():
+                link.unlink()
+            elif link.is_dir():
+                shutil.rmtree(link)
+            remove_staged_mod(game_slug, mod_name)
+            if pkg_id:
+                self._deactivate_package(pkg_id)
+            remove_from_manifest(mod_name)
+            logger.info(f"✓ Uninstalled: {mod_name}")
             return
 
         failed: list[str] = []
