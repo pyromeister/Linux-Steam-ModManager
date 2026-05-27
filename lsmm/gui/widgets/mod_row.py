@@ -71,7 +71,7 @@ class ModRow(Gtk.ListBoxRow):
 
             version = nexus.get("version")
             if version:
-                ver_chip = Gtk.Label(label=f"v{version}")
+                ver_chip = Gtk.Label(label=f"v{version.lstrip('v')}")
                 ver_chip.add_css_class("dim-label")
                 ver_chip.add_css_class("caption")
                 ver_chip.set_valign(Gtk.Align.CENTER)
