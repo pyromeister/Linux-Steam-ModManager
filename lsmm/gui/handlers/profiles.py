@@ -215,21 +215,23 @@ def on_new_profile(win, _btn):
     dialog.present()
 
 
+_TOGGLEABLE_KINDS = {"mod", "se_plugin", "unmanaged"}
+
+
 def _apply_system_profile(win, name: str):
     if not win.engine:
         return
     mods = win.engine.list_mods()
     if name == "Vanilla":
         for mod in mods:
-            if mod.get("active") and mod.get("kind") == "mod":
+            if mod.get("active") and mod.get("kind") in _TOGGLEABLE_KINDS:
                 win.engine.disable_mod(mod["name"])
     elif name == "All Mods":
         for mod in mods:
-            if not mod.get("active") and mod.get("kind") == "mod":
+            if not mod.get("active") and mod.get("kind") in _TOGGLEABLE_KINDS:
                 win.engine.enable_mod(mod["name"])
     _prof.set_active(win._game_slug, name)
-    win._refresh_mods()
-    win._refresh_load_order()
+    win._refresh_all()
     win._toast(f"Loaded: {name}")
 
 

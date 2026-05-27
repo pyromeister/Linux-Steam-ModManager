@@ -338,6 +338,10 @@ class BepInExEngine(BaseEngine):
     def enable_mod(self, mod_name: str) -> None:
         manifest = load_manifest()
         if mod_name not in manifest:
+            # Untracked DLL — locate by stem in plugins_dir
+            disabled = self.plugins_dir / f"{mod_name}{DLL_EXT}.disabled"
+            if disabled.exists():
+                disabled.rename(self.plugins_dir / f"{mod_name}{DLL_EXT}")
             return
         for f_str in manifest[mod_name].get("files", []):
             if f_str.endswith(DLL_EXT):
@@ -349,6 +353,10 @@ class BepInExEngine(BaseEngine):
     def disable_mod(self, mod_name: str) -> None:
         manifest = load_manifest()
         if mod_name not in manifest:
+            # Untracked DLL — locate by stem in plugins_dir
+            dll = self.plugins_dir / f"{mod_name}{DLL_EXT}"
+            if dll.exists():
+                dll.rename(self.plugins_dir / f"{mod_name}{DLL_EXT}.disabled")
             return
         for f_str in manifest[mod_name].get("files", []):
             p = Path(f_str)
