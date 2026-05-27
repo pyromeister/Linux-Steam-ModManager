@@ -6,6 +6,8 @@ from pathlib import Path
 
 import pytest
 
+import io
+
 from lsmm.core import installer
 from lsmm.core.installer import (
     ConflictError,
@@ -18,6 +20,7 @@ from lsmm.core.installer import (
     load_manifest,
     record_install,
     remove_from_manifest,
+    safe_extract_zip,
     save_manifest,
     temp_extract_dir,
     extract,
@@ -88,6 +91,23 @@ class TestExtract:
     def test_safe_archive_member_path_blocks_absolute_paths(self, tmp_path):
         with pytest.raises(ValueError, match="Path traversal blocked"):
             installer.safe_archive_member_path(tmp_path, "/tmp/escape.txt")
+
+    def test_zip_path_traversal_bytesio_no_partial_extraction(self, tmp_path):
+        # Matches modfolder.py inner-zip pattern: ZipFile(BytesIO(...))
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as z:
+            z.writestr("safe.txt", "safe")
+            z.writestr("../escape.txt", "owned")
+        buf.seek(0)
+
+        dest = tmp_path / "extracted"
+        dest.mkdir()
+        with zipfile.ZipFile(io.BytesIO(buf.read())) as z:
+            with pytest.raises(ValueError, match="Path traversal blocked"):
+                safe_extract_zip(z, dest)
+
+        assert not (tmp_path / "escape.txt").exists()
+        assert not (dest / "safe.txt").exists()
 
     def test_unsupported_format_raises(self, tmp_path):
         archive = tmp_path / "mod.tar.gz"

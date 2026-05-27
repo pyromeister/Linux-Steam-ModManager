@@ -145,12 +145,13 @@ class ModFolderEngine(BaseEngine):
             self.game_root.mkdir(parents=True, exist_ok=True)
             installed_files = []
             with zipfile.ZipFile(io.BytesIO(inner_bytes)) as inner:
-                for member in inner.namelist():
-                    if member.endswith("/"):
-                        continue
-                    dest = safe_archive_member_path(self.game_root, member)
+                file_members = [m for m in inner.namelist() if not m.endswith("/")]
+                for m in file_members:
+                    safe_archive_member_path(self.game_root, m)
+                for m in file_members:
+                    dest = safe_archive_member_path(self.game_root, m)
                     dest.parent.mkdir(parents=True, exist_ok=True)
-                    dest.write_bytes(inner.read(member))
+                    dest.write_bytes(inner.read(m))
                     installed_files.append(dest)
 
             for make_exec in [exe, smapi.get("launch_script", "")]:
