@@ -13,9 +13,10 @@ def _window():
     return win
 
 
-def _engine():
+def _engine(supports_staging: bool = True):
     eng = MagicMock()
     eng.install = MagicMock()
+    eng.supports_staging = supports_staging
     return eng
 
 
@@ -56,6 +57,28 @@ def test_fomod_config_passed_to_engine_install(tmp_path):
 
 
 # ── ISC-38: cancelled FOMOD (None) skips engine.install ──────────────────────
+
+def test_engine_without_staging_receives_no_staging_kwarg(tmp_path):
+    path = tmp_path / "mod.zip"
+    path.write_bytes(b"fake")
+    engine = _engine(supports_staging=False)
+    with patch("lsmm.gui.handlers.install.detect_fomod", return_value=None):
+        _install_one(_window(), path, engine)
+    engine.install.assert_called_once_with(path, fomod_files=None)
+
+
+def test_engine_without_staging_force_install_receives_no_staging_kwarg(tmp_path):
+    from lsmm.core.installer import ConflictError
+    path = tmp_path / "mod.zip"
+    path.write_bytes(b"fake")
+    engine = _engine(supports_staging=False)
+    engine.install.side_effect = [ConflictError([("file.esp", "OtherMod")]), None]
+    with patch("lsmm.gui.handlers.install.detect_fomod", return_value=None), \
+         patch("lsmm.gui.handlers.install.ask_conflict", return_value=True):
+        _install_one(_window(), path, engine)
+    assert engine.install.call_count == 2
+    engine.install.assert_called_with(path, force=True, fomod_files=None)
+
 
 def test_fomod_cancel_skips_install(tmp_path):
     path = tmp_path / "mod.zip"

@@ -61,6 +61,7 @@ class BethesdaEngine(BaseEngine):
     has_load_order = True
     has_script_extender = True
     has_activation_toggle = True
+    supports_staging = True
 
     def __init__(self, profile: dict):
         super().__init__(profile)

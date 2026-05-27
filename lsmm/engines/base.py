@@ -12,6 +12,7 @@ class BaseEngine(ABC):
     has_load_order: bool = False
     has_script_extender: bool = False
     has_activation_toggle: bool = False
+    supports_staging: bool = False
 
     def __init__(self, game_profile: dict):
         self.profile = game_profile
