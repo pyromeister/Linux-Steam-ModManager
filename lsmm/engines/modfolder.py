@@ -311,10 +311,20 @@ class ModFolderEngine(BaseEngine):
             # Skip entries whose files belong to a different game_root (stale override)
             if files and not any(Path(f).is_relative_to(self.game_root) for f in files):
                 continue
-            active = not any(
-                not Path(f).exists() and Path(str(f) + ".disabled").exists()
-                for f in files
-            )
+            top = self._mod_top_dir(files)
+            if top is not None:
+                active = top.exists()
+                if not active and not Path(str(top) + ".disabled").exists():
+                    # Folder gone entirely — fall back to old per-file check
+                    active = not any(
+                        not Path(f).exists() and Path(str(f) + ".disabled").exists()
+                        for f in files
+                    )
+            else:
+                active = not any(
+                    not Path(f).exists() and Path(str(f) + ".disabled").exists()
+                    for f in files
+                )
             tracked_names.add(mod_name)
             # Collect top-level installed dir names so the directory scan
             # doesn't show them as untracked duplicates.
@@ -373,9 +383,27 @@ class ModFolderEngine(BaseEngine):
 
     # ── Activation ────────────────────────────────────────────────────────────
 
+    def _mod_top_dir(self, files: list[str]) -> "Path | None":
+        for f_str in files:
+            try:
+                rel = Path(f_str).relative_to(self.mods_dir)
+                if rel.parts:
+                    return self.mods_dir / rel.parts[0].removesuffix(".disabled")
+            except ValueError:
+                pass
+        return None
+
     def enable_mod(self, mod_name: str) -> None:
         manifest = load_manifest()
         if mod_name in manifest:
+            top = self._mod_top_dir(manifest[mod_name].get("files", []))
+            if top is not None:
+                disabled = Path(str(top) + ".disabled")
+                if disabled.exists():
+                    disabled.rename(top)
+                    logger.info(f"✓ enabled: {mod_name}")
+                    return
+            # Fallback: old per-file method (backward compat)
             for f_str in manifest[mod_name].get("files", []):
                 disabled = Path(str(f_str) + ".disabled")
                 if disabled.exists():
@@ -389,6 +417,12 @@ class ModFolderEngine(BaseEngine):
     def disable_mod(self, mod_name: str) -> None:
         manifest = load_manifest()
         if mod_name in manifest:
+            top = self._mod_top_dir(manifest[mod_name].get("files", []))
+            if top is not None and top.exists():
+                top.rename(Path(str(top) + ".disabled"))
+                logger.info(f"✓ disabled: {mod_name}")
+                return
+            # Fallback: old per-file method (backward compat)
             for f_str in manifest[mod_name].get("files", []):
                 p = Path(f_str)
                 if p.exists():
