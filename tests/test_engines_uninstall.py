@@ -3,7 +3,6 @@
 Issue #80: remove_from_manifest() must only run after successful file deletion.
 """
 
-import json
 from pathlib import Path
 from unittest.mock import patch
 

@@ -1,6 +1,5 @@
 """Tests for #81: _refresh_* methods must be read-only — no install/write side effects."""
 
-import threading
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -34,6 +33,7 @@ def _make_win(version_prefix="Installed"):
 def test_refresh_framework_untracked_version_does_not_auto_install():
     """When framework is installed but version not in manifest,
     refresh must NOT call setup_framework — just show update available."""
+    pytest.importorskip("gi")
     from lsmm.gui.handlers.mod_engine import refresh_mod_engine_tab
 
     win = _make_win()
@@ -52,6 +52,7 @@ def test_refresh_framework_untracked_version_does_not_auto_install():
 @pytest.mark.gui
 def test_refresh_framework_known_version_shows_up_to_date():
     """When installed version matches latest, refresh shows 'up to date' — no install."""
+    pytest.importorskip("gi")
     from lsmm.gui.handlers.mod_engine import refresh_mod_engine_tab
 
     win = _make_win()
@@ -71,6 +72,7 @@ def test_refresh_framework_known_version_shows_up_to_date():
 @pytest.mark.gui
 def test_refresh_framework_no_github_release_does_not_install():
     """When GitHub returns no release info, refresh must NOT install."""
+    pytest.importorskip("gi")
     from lsmm.gui.handlers.mod_engine import refresh_mod_engine_tab
 
     win = _make_win()
