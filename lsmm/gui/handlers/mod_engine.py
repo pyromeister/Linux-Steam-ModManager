@@ -113,6 +113,13 @@ def build_mod_engine_tab(win) -> Gtk.Widget:
     win._ensure_ini_btn.set_visible(False)
     btn_row.append(win._ensure_ini_btn)
 
+    win._uninstall_fw_btn = Gtk.Button(label="Uninstall")
+    win._uninstall_fw_btn.set_tooltip_text("Remove mod engine files from game directory")
+    win._uninstall_fw_btn.add_css_class("destructive-action")
+    win._uninstall_fw_btn.connect("clicked", lambda btn: on_uninstall_framework(win, btn))
+    win._uninstall_fw_btn.set_visible(False)
+    btn_row.append(win._uninstall_fw_btn)
+
     win._uninstall_se_btn = Gtk.Button(label="Uninstall SE")
     win._uninstall_se_btn.set_tooltip_text("Remove script extender files from game directory")
     win._uninstall_se_btn.add_css_class("destructive-action")
@@ -177,6 +184,9 @@ def refresh_mod_engine_tab(win):
     win._ensure_ini_btn.set_visible(hasattr(win.engine, "ensure_ini"))
     _se_loader = getattr(getattr(win.engine, "paths", None), "se_loader", None)
     win._uninstall_se_btn.set_visible(bool(_se_loader and _se_loader.exists()))
+    _fw_installed = (getattr(win.engine, "has_framework_setup", False)
+                     and win.engine.is_framework_installed())
+    win._uninstall_fw_btn.set_visible(_fw_installed)
     win._update_setup_btn()
 
     game_name = next((n for s, n in win.games if s == win._game_slug), win._game_slug or "")
@@ -383,16 +393,66 @@ def on_ensure_ini(win, _btn):
         win._toast(f"INI update failed: {e}")
 
 
+def on_uninstall_framework(win, _btn):
+    if not win.engine or not getattr(win.engine, "has_framework_setup", False):
+        return
+    fw = getattr(win.engine, "framework_name", "BepInEx")
+    dialog = Adw.MessageDialog(
+        transient_for=win,
+        heading=f"Uninstall {fw}?",
+        body=f"This will remove all {fw} files from the game directory. Mods that depend on {fw} will stop working.",
+    )
+    dialog.add_response("cancel", "Cancel")
+    dialog.add_response("uninstall", f"Uninstall {fw}")
+    dialog.set_response_appearance("uninstall", Adw.ResponseAppearance.DESTRUCTIVE)
+    dialog.set_default_response("cancel")
+
+    def _on_response(_d, response):
+        if response != "uninstall":
+            return
+        try:
+            win.engine.uninstall(fw)
+            win._se_version_cache.pop(win._game_slug or "", None)
+            win._se_check_in_flight.discard(win._game_slug or "")
+            win._refresh_all()
+            win._toast(f"✓ {fw} removed")
+        except Exception as e:
+            win._toast(f"Uninstall failed: {e}")
+
+    dialog.connect("response", _on_response)
+    dialog.present()
+
+
 def on_uninstall_se(win, _btn):
     if not win.engine or not hasattr(win.engine, "uninstall_script_extender"):
         return
-    try:
-        win.engine.uninstall_script_extender()
-        win._se_version_cache.pop(win._game_slug or "", None)
-        refresh_mod_engine_tab(win)
-        win._toast("✓ Script extender removed")
-    except Exception as e:
-        win._toast(f"Uninstall failed: {e}")
+    se = win.engine.profile.get("script_extender", {})
+    se_name = se.get("name", "Script Extender")
+    dialog = Adw.MessageDialog(
+        transient_for=win,
+        heading=f"Uninstall {se_name}?",
+        body=f"This will remove all {se_name} files from the game directory. "
+             f"Mods that depend on {se_name} will stop working.",
+    )
+    dialog.add_response("cancel", "Cancel")
+    dialog.add_response("uninstall", f"Uninstall {se_name}")
+    dialog.set_response_appearance("uninstall", Adw.ResponseAppearance.DESTRUCTIVE)
+    dialog.set_default_response("cancel")
+
+    def _on_response(_d, response):
+        if response != "uninstall":
+            return
+        try:
+            win.engine.uninstall_script_extender()
+            win._se_version_cache.pop(win._game_slug or "", None)
+            win._se_check_in_flight.discard(win._game_slug or "")
+            win._refresh_all()
+            win._toast(f"✓ {se_name} removed")
+        except Exception as e:
+            win._toast(f"Uninstall failed: {e}")
+
+    dialog.connect("response", _on_response)
+    dialog.present()
 
 
 def show_verify_warnings(win, warnings: list) -> None:
