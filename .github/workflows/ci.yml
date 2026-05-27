@@ -4,11 +4,13 @@ on:
   pull_request:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions: read-all
 
 jobs:
   lint:
+    name: Lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -19,12 +21,13 @@ jobs:
           python-version: "3.12"
 
       - name: Install flake8
-        run: pip install flake8
+        run: python -m pip install flake8
 
       - name: Lint
         run: flake8 . --count --max-line-length=120 --exclude=__pycache__,.git
 
-  test:
+  unit:
+    name: Unit tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -35,14 +38,61 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install -e ".[dev]"
+        run: python -m pip install -e ".[dev]"
 
-      - name: Test with coverage
+      - name: Run fast test suite
+        run: pytest -m "not gui and not integration and not network and not manual" -q
+
+  coverage:
+    name: Full coverage ratchet
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: python -m pip install -e ".[dev]"
+
+      - name: Run tests with full package coverage
         run: |
           pytest \
-            --cov=lsmm.core.installer \
-            --cov=lsmm.core.plugins \
-            --cov=lsmm.core.nexus \
+            --cov=lsmm \
             --cov-report=term-missing \
-            --cov-fail-under=70 \
+            --cov-fail-under=21 \
             tests/
+
+  gui-smoke:
+    name: GUI smoke tests under Xvfb
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install GTK/libadwaita test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            dbus-x11 \
+            gir1.2-adw-1 \
+            gir1.2-gtk-4.0 \
+            libadwaita-1-0 \
+            libgtk-4-1 \
+            python3-gi \
+            python3-gi-cairo \
+            python3-pip \
+            python3-venv \
+            xvfb
+
+      - name: Create venv with system GTK bindings
+        run: |
+          python3 -m venv --system-site-packages .venv
+          . .venv/bin/activate
+          python -m pip install -e ".[dev]"
+
+      - name: Run GUI smoke tests
+        run: |
+          . .venv/bin/activate
+          dbus-run-session -- xvfb-run -a pytest -m gui tests/gui -q

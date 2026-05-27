@@ -72,6 +72,23 @@ class TestExtract:
         assert (dest / "Data" / "plugin.esp").exists()
         assert (dest / "readme.txt").exists()
 
+    def test_zip_path_traversal_is_blocked(self, tmp_path):
+        archive = tmp_path / "evil.zip"
+        with zipfile.ZipFile(archive, "w") as z:
+            z.writestr("safe.txt", "safe")
+            z.writestr("../escape.txt", "owned")
+
+        dest = tmp_path / "extracted"
+        with pytest.raises(ValueError, match="Path traversal blocked"):
+            extract(archive, dest)
+
+        assert not (tmp_path / "escape.txt").exists()
+        assert not (dest / "safe.txt").exists()
+
+    def test_safe_archive_member_path_blocks_absolute_paths(self, tmp_path):
+        with pytest.raises(ValueError, match="Path traversal blocked"):
+            installer.safe_archive_member_path(tmp_path, "/tmp/escape.txt")
+
     def test_unsupported_format_raises(self, tmp_path):
         archive = tmp_path / "mod.tar.gz"
         archive.write_bytes(b"fake")

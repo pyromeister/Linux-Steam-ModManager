@@ -9,6 +9,7 @@ No load order (BepInEx handles plugin ordering internally).
 import json
 import logging
 import shutil
+import tempfile
 import urllib.error
 import urllib.request
 import zipfile
@@ -26,6 +27,8 @@ from lsmm.core.installer import (
     load_manifest,
     record_install,
     remove_from_manifest,
+    safe_archive_member_path,
+    safe_extract_zip,
     temp_extract_dir,
 )
 
@@ -136,45 +139,52 @@ class BepInExEngine(BaseEngine):
 
         dl_url = asset["browser_download_url"]
         filename = asset["name"]
-        tmp_zip = Path(f"/tmp/bepinex_{filename}")
-
-        logger.info(f"Downloading {filename} ({version})...")
-        dl_req = urllib.request.Request(dl_url, headers={"User-Agent": USER_AGENT})
-        with urllib.request.urlopen(dl_req, timeout=60) as resp:
-            total = int(resp.headers.get("Content-Length", 0))
-            downloaded = 0
-            with tmp_zip.open("wb") as f:
-                while True:
-                    chunk = resp.read(65536)
-                    if not chunk:
-                        break
-                    f.write(chunk)
-                    downloaded += len(chunk)
-                    if on_progress:
-                        on_progress(downloaded, total)
-
-        logger.info(f"Extracting to {self.game_root}...")
-        self.game_root.mkdir(parents=True, exist_ok=True)
-        with zipfile.ZipFile(tmp_zip) as z:
-            members = z.namelist()
-            z.extractall(self.game_root)
-
-        # Track in manifest so it can be uninstalled like any other mod
-        installed_files = [
-            self.game_root / m
-            for m in members
-            if not m.endswith("/")  # skip directory entries
-        ]
-        game_slug = self.profile.get("slug")
-        record_install(
-            "BepInEx",
-            tmp_zip,
-            installed_files,
-            game_slug=game_slug,
-            nexus_meta={"source": "github", "version": version},
+        tmp_file = tempfile.NamedTemporaryFile(
+            prefix="lsmm_bepinex_",
+            suffix=f"_{Path(filename).name}",
+            delete=False,
         )
+        tmp_zip = Path(tmp_file.name)
+        tmp_file.close()
 
-        tmp_zip.unlink(missing_ok=True)
+        try:
+            logger.info(f"Downloading {filename} ({version})...")
+            dl_req = urllib.request.Request(dl_url, headers={"User-Agent": USER_AGENT})
+            with urllib.request.urlopen(dl_req, timeout=60) as resp:
+                total = int(resp.headers.get("Content-Length", 0))
+                downloaded = 0
+                with tmp_zip.open("wb") as f:
+                    while True:
+                        chunk = resp.read(65536)
+                        if not chunk:
+                            break
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        if on_progress:
+                            on_progress(downloaded, total)
+
+            logger.info(f"Extracting to {self.game_root}...")
+            self.game_root.mkdir(parents=True, exist_ok=True)
+            with zipfile.ZipFile(tmp_zip) as z:
+                members = z.namelist()
+                safe_extract_zip(z, self.game_root)
+
+            # Track in manifest so it can be uninstalled like any other mod
+            installed_files = [
+                safe_archive_member_path(self.game_root, m)
+                for m in members
+                if not m.endswith("/")  # skip directory entries
+            ]
+            game_slug = self.profile.get("slug")
+            record_install(
+                "BepInEx",
+                tmp_zip,
+                installed_files,
+                game_slug=game_slug,
+                nexus_meta={"source": "github", "version": version},
+            )
+        finally:
+            tmp_zip.unlink(missing_ok=True)
 
         logger.info(f"✓ BepInEx {version} installed to {self.game_root}")
         return version
