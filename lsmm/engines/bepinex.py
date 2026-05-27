@@ -267,8 +267,10 @@ class BepInExEngine(BaseEngine):
                     disabled.unlink()
             # Remove empty parent directories up to plugins_dir
             try:
-                if f.parent != self.plugins_dir and not any(f.parent.iterdir()):
-                    f.parent.rmdir()
+                parent = f.parent
+                while parent != self.plugins_dir and parent.exists() and not any(parent.iterdir()):
+                    parent.rmdir()
+                    parent = parent.parent
             except Exception:
                 pass
 

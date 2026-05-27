@@ -275,8 +275,10 @@ class ModFolderEngine(BaseEngine):
                         candidate.unlink()
             # Clean empty parent dirs up to mods_dir
             try:
-                if f.parent != self.mods_dir and f.parent.exists() and not any(f.parent.iterdir()):
-                    f.parent.rmdir()
+                parent = f.parent
+                while parent != self.mods_dir and parent.exists() and not any(parent.iterdir()):
+                    parent.rmdir()
+                    parent = parent.parent
             except Exception:
                 pass
 
