@@ -256,6 +256,12 @@ class ModManagerWindow(Adw.ApplicationWindow):
     def _refresh_mod_engine_tab(self):
         refresh_mod_engine_tab(self)
 
+    def _refresh_all(self):
+        self._refresh_mods()
+        self._refresh_load_order()
+        self._refresh_mod_engine_tab()
+        self._refresh_profiles_tab()
+
     # ── Progress bar helpers ──────────────────────────────────────────────────
 
     def _progress_start_pulse(self) -> None:

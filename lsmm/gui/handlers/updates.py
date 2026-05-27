@@ -95,7 +95,7 @@ def update_all_async(window, updates: list):
         GLib.idle_add(window._progress_done)
         GLib.idle_add(window.status_label.set_text, "Ready")
         if not browser_mods:
-            GLib.idle_add(window._refresh_mods)
+            GLib.idle_add(window._refresh_all)
             GLib.idle_add(window._toast, "All mods updated")
 
     threading.Thread(target=run, daemon=True).start()

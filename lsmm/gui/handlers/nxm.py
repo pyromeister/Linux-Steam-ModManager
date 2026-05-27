@@ -86,8 +86,7 @@ def do_nxm_import(window, url: str, api_key: str):
 
             GLib.idle_add(window._progress_done)
             GLib.idle_add(window.status_label.set_text, "Ready")
-            GLib.idle_add(window._refresh_mods)
-            GLib.idle_add(window._refresh_load_order)
+            GLib.idle_add(window._refresh_all)
             GLib.idle_add(window._toast, f"Installed: {filename}")
 
         except NxmExpiredError:

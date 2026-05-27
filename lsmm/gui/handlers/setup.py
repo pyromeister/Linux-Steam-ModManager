@@ -94,10 +94,12 @@ def do_setup_bepinex(win):
 
             GLib.idle_add(win._progress_start_pulse)
             GLib.idle_add(win.status_label.set_text, "Extracting BepInEx...")
+            win._se_version_cache.pop(win._game_slug or "", None)
+            win._se_check_in_flight.discard(win._game_slug or "")
             GLib.idle_add(win._progress_done)
             GLib.idle_add(win.status_label.set_text, "Ready")
             GLib.idle_add(win._update_setup_btn)
-            GLib.idle_add(win._refresh_mods)
+            GLib.idle_add(win._refresh_all)
             GLib.idle_add(show_bepinex_launch_dialog, win)
             GLib.idle_add(win._toast, f"BepInEx {version} installed successfully")
         except Exception as e:
@@ -186,10 +188,12 @@ def _do_download_se(win, se_name: str):
 
         try:
             win.engine.download_script_extender(on_progress=on_progress)
+            win._se_version_cache.pop(win._game_slug or "", None)
+            win._se_check_in_flight.discard(win._game_slug or "")
             GLib.idle_add(win._progress_done)
             GLib.idle_add(win.status_label.set_text, "Ready")
-            GLib.idle_add(win._refresh_mod_engine_tab)
             GLib.idle_add(win._update_setup_btn)
+            GLib.idle_add(win._refresh_all)
             GLib.idle_add(_finish_se_setup, win)
         except Exception as e:
             logger.error("%s download failed: %s", se_name, e, exc_info=True)

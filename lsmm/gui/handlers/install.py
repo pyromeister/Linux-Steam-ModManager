@@ -153,10 +153,7 @@ def install_batch(window, paths: list):
         window._installing = False
         _glib().idle_add(window._progress_done)
         _glib().idle_add(window.status_label.set_text, "Ready")
-        _glib().idle_add(window._refresh_mods)
-        _glib().idle_add(window._refresh_load_order)
-        _glib().idle_add(window._refresh_mod_engine_tab)
-        _glib().idle_add(window._refresh_profiles_tab)
+        _glib().idle_add(window._refresh_all)
         if len(paths) > 1:
             failed = len(paths) - succeeded
             msg = f"Installed {succeeded}/{len(paths)}"
@@ -170,10 +167,7 @@ def install_batch(window, paths: list):
 def do_uninstall(window, mod_name: str):
     def run():
         window.engine.uninstall(mod_name)
-        _glib().idle_add(window._refresh_mods)
-        _glib().idle_add(window._refresh_load_order)
-        _glib().idle_add(window._refresh_mod_engine_tab)
-        _glib().idle_add(window._refresh_profiles_tab)
+        _glib().idle_add(window._refresh_all)
         _glib().idle_add(window._update_setup_btn)
         _glib().idle_add(window._toast, f"Uninstalled: {mod_name}")
     threading.Thread(target=run, daemon=True).start()

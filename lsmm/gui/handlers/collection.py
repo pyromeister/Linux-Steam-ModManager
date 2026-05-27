@@ -210,7 +210,7 @@ def on_import_collection(window, url: str):
                   collection_mods=collection_mods,
                   collection_game_domain=game_domain)
         mod_count = len(collection_mods) if collection_mods else 0
-        GLib.idle_add(window._refresh_profiles_tab)
+        GLib.idle_add(window._refresh_all)
         if collection_mods:
             from lsmm.gui.dialogs.collection import show_collection_mods_dialog
             GLib.idle_add(show_collection_mods_dialog, window, collection_name, slug)
@@ -278,6 +278,5 @@ def apply_profile(window, slug: str, name: str):
         window.engine.set_load_order(order)
 
     prof.set_active(slug, name)
-    window._refresh_mods()
-    window._refresh_load_order()
+    window._refresh_all()
     window._toast(f"Loaded profile: {name}")

@@ -199,7 +199,7 @@ def refresh_mod_engine_tab(win):
         win._se_version_row.set_visible(True)
         github_repo = fw_cfg.get("github_repo")
         slug = win._game_slug or ""
-        ver_prefix = f"v{ver}" if ver else "Installed"
+        ver_prefix = f"v{ver.lstrip('v')}" if ver else "Installed"
         if not installed:
             set_version_label(win._se_version_val, "Not installed")
         elif github_repo:
@@ -484,11 +484,9 @@ def on_edit_paths(win, _btn):
             win.engine = _load_engine(win._game_slug)
         except Exception:
             pass
-        refresh_mod_engine_tab(win)
-        win._refresh_mods()
+        win._refresh_all()
         win._update_action_sensitivity()
         win._update_setup_btn()
-        GLib.idle_add(win._refresh_profiles_tab)
         dialog.close()
         win._toast("Path overrides saved")
 
