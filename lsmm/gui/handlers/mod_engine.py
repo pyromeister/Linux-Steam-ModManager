@@ -211,10 +211,7 @@ def refresh_mod_engine_tab(win):
                 win._se_check_in_flight.add(slug)
                 val_ref = win._se_version_val
 
-                eng_ref = win.engine
-
-                def _fw_check(repo=github_repo, lbl=val_ref, s=slug, vp=ver_prefix,
-                              eng=eng_ref):
+                def _fw_check(repo=github_repo, lbl=val_ref, s=slug, vp=ver_prefix):
                     latest = fetch_github_latest_tag(repo)
                     installed_raw = vp.lstrip("v") if vp != "Installed" else None
                     if latest:
@@ -223,15 +220,7 @@ def refresh_mod_engine_tab(win):
                         elif installed_raw:
                             text = f"✓ {vp} — v{latest} available"
                         else:
-                            GLib.idle_add(lambda: (
-                                win._game_slug == s
-                                and set_version_label(lbl, "✓ Installed — updating…")
-                            ) or False)
-                            try:
-                                new_ver = eng.setup_framework()
-                                text = f"✓ v{new_ver} — up to date"
-                            except Exception:
-                                text = f"✓ Installed — v{latest} available"
+                            text = f"✓ Installed — v{latest} available"
                     else:
                         text = f"✓ {vp}"
                     win._se_version_cache[s] = text
