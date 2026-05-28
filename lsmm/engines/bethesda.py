@@ -148,6 +148,22 @@ class BethesdaEngine(BaseEngine):
     def uninstall(self, mod_name: str) -> None:
         entry = load_manifest().get(mod_name)
         if not entry:
+            # Untracked DLL in se_plugins_dir
+            if self.paths.se_plugins_dir:
+                candidate = self.paths.se_plugins_dir / f"{mod_name}{DLL_EXTENSION}"
+                if candidate.exists():
+                    candidate.unlink()
+                    logger.info(f"✓ Removed untracked SE plugin: {candidate.name}")
+                    return
+            # Unmanaged plugin — mod_name IS the plugin filename (e.g. "MyMod.esp")
+            plugin_file = self.paths.data_dir / mod_name
+            if plugin_file.exists() and plugin_file.suffix.lower() in PLUGIN_EXTENSIONS:
+                pf = PluginsFile.read(self.paths.plugins_txt)
+                pf.remove(mod_name)
+                pf.write()
+                plugin_file.unlink()
+                logger.info(f"✓ Removed unmanaged plugin: {mod_name}")
+                return
             logger.warning(f"Not installed: {mod_name}")
             return
 

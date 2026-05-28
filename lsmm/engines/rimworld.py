@@ -184,7 +184,18 @@ class RimWorldEngine(BaseEngine):
         game_slug = self._game_slug()
         entry = load_manifest().get(mod_name)
         if not entry:
-            logger.warning(f"Not tracked: {mod_name}")
+            # Untracked mod directory
+            mod_dir = self.mods_dir / mod_name
+            if mod_dir.exists():
+                pkg_id = _read_about(mod_dir)["packageId"]
+                if mod_dir.is_symlink():
+                    mod_dir.unlink()
+                else:
+                    shutil.rmtree(mod_dir)
+                self._deactivate_package(pkg_id)
+                logger.info(f"✓ Removed untracked: {mod_name}")
+            else:
+                logger.warning(f"Not tracked: {mod_name}")
             return
 
         if is_staged(game_slug, mod_name):

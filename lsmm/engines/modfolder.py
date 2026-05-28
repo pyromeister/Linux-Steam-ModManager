@@ -290,6 +290,17 @@ class ModFolderEngine(BaseEngine):
         game_slug = self.profile.get("slug")
         entry = load_manifest().get(mod_name)
         if not entry:
+            # Untracked folder in mods_dir (active or .disabled)
+            for suffix in ("", ".disabled"):
+                candidate = self.mods_dir / f"{mod_name}{suffix}"
+                if candidate.is_symlink():
+                    candidate.unlink()
+                    logger.info(f"✓ Removed untracked symlink: {mod_name}")
+                    return
+                if candidate.is_dir():
+                    shutil.rmtree(candidate)
+                    logger.info(f"✓ Removed untracked: {mod_name}")
+                    return
             logger.warning(f"Not installed: {mod_name}")
             return
 

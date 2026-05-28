@@ -284,10 +284,31 @@ class BepInExEngine(BaseEngine):
 
     # ── Uninstall ────────────────────────────────────────────────────────────
 
+    def _uninstall_framework_untracked(self) -> None:
+        bepinex_dir = self.game_root / "BepInEx"
+        if bepinex_dir.exists():
+            shutil.rmtree(bepinex_dir)
+        for name in ("run_bepinex.sh", "doorstop_config.ini",
+                     "libdoorstop.so", "winhttp.dll"):
+            p = self.game_root / name
+            if p.exists():
+                p.unlink()
+        logger.info("✓ Removed untracked BepInEx")
+
     def uninstall(self, mod_name: str) -> None:
         game_slug = self.profile.get("slug")
         entry = load_manifest().get(mod_name)
         if not entry:
+            if mod_name in ("BepInEx", self.framework_name):
+                self._uninstall_framework_untracked()
+                return
+            # Untracked DLL in plugins_dir
+            for suffix in (DLL_EXT, DLL_EXT + ".disabled"):
+                candidate = self.plugins_dir / f"{mod_name}{suffix}"
+                if candidate.exists():
+                    candidate.unlink()
+                    logger.info(f"✓ Removed untracked: {candidate.name}")
+                    return
             logger.warning(f"Not installed: {mod_name}")
             return
 
