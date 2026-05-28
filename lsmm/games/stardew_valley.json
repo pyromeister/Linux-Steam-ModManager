@@ -14,6 +14,8 @@
     "github_repo": "Pathoschild/SMAPI",
     "asset_name": "installer.zip",
     "installer_subdir": "internal/linux",
-    "install_dat": "install.dat"
+    "install_dat": "install.dat",
+    "game_deps_file": "Stardew Valley.deps.json",
+    "launch_env_prefix": "SMAPI_USE_CURRENT_SHELL=true"
   }
 }

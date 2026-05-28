@@ -17,6 +17,11 @@ class BaseEngine(ABC):
     def __init__(self, game_profile: dict):
         self.profile = game_profile
 
+    @property
+    def framework_config(self) -> dict:
+        """Return the framework-specific profile config dict (e.g. bepinex/smapi block)."""
+        return {}
+
     # --- Required ---
 
     @abstractmethod

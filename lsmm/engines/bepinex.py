@@ -73,6 +73,10 @@ class BepInExEngine(BaseEngine):
         else:
             self._bepinex_build = bepinex_cfg.get("build", "linux_x64")
 
+    @property
+    def framework_config(self) -> dict:
+        return self.profile.get("bepinex", {})
+
     def is_framework_installed(self) -> bool:
         """True if BepInEx core is present in the game root."""
         return (self.game_root / "BepInEx" / "core").exists()

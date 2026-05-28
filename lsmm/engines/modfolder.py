@@ -79,6 +79,10 @@ class ModFolderEngine(BaseEngine):
     def has_framework_setup(self) -> bool:
         return bool(self.profile.get("smapi"))
 
+    @property
+    def framework_config(self) -> dict:
+        return self.profile.get("smapi", {}) if self.has_framework_setup else {}
+
     def is_framework_installed(self) -> bool:
         smapi = self.profile.get("smapi", {})
         exe = smapi.get("executable", "StardewModdingAPI")
@@ -93,9 +97,9 @@ class ModFolderEngine(BaseEngine):
         if not path.exists():
             raise RuntimeError(f"{launch} not found — reinstall SMAPI")
         path.chmod(path.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
-        # SMAPI_USE_CURRENT_SHELL: run SMAPI in Steam's process instead of
-        # opening a new terminal window, so Steam tracks the game correctly.
-        return f'SMAPI_USE_CURRENT_SHELL=true "{path}" %command%'
+        env_prefix = smapi.get("launch_env_prefix", "")
+        prefix = f"{env_prefix} " if env_prefix else ""
+        return f'{prefix}"{path}" %command%'
 
     def setup_framework(self, on_progress=None) -> str:
         smapi = self.profile.get("smapi", {})
@@ -170,15 +174,15 @@ class ModFolderEngine(BaseEngine):
                     if p.exists():
                         p.chmod(p.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
 
-            # SMAPI's install.dat doesn't include StardewModdingAPI.deps.json — the
-            # official installer generates it by copying the game's deps file. Without
-            # it the dotnet apphost falls into split/FX mode and shows help text instead
-            # of launching. Copy game deps.json so the host can resolve assemblies.
-            game_deps = self.game_root / "Stardew Valley.deps.json"
-            smapi_deps = self.game_root / f"{exe}.deps.json"
-            if game_deps.exists() and not smapi_deps.exists():
-                shutil.copy2(game_deps, smapi_deps)
-                installed_files.append(smapi_deps)
+            # Some frameworks (e.g. SMAPI) need the game's .deps.json copied so the
+            # dotnet apphost can resolve assemblies. Source filename comes from profile.
+            game_deps_name = smapi.get("game_deps_file")
+            if game_deps_name:
+                game_deps = self.game_root / game_deps_name
+                smapi_deps = self.game_root / f"{exe}.deps.json"
+                if game_deps.exists() and not smapi_deps.exists():
+                    shutil.copy2(game_deps, smapi_deps)
+                    installed_files.append(smapi_deps)
 
             record_install(
                 "SMAPI",

@@ -77,8 +77,10 @@ def show_bepinex_launch_dialog(win):
 
 
 def do_setup_bepinex(win):
+    fw = getattr(win.engine, "framework_name", "BepInEx")
+
     def run():
-        GLib.idle_add(win.status_label.set_text, "Fetching BepInEx release info...")
+        GLib.idle_add(win.status_label.set_text, f"Fetching {fw} release info...")
         GLib.idle_add(win._progress_set, 0.0)
         try:
             def on_progress(downloaded, total):
@@ -86,14 +88,14 @@ def do_setup_bepinex(win):
                     GLib.idle_add(win._progress_set, downloaded / total)
                 GLib.idle_add(
                     win.status_label.set_text,
-                    f"Downloading BepInEx... {downloaded // 1024} KB"
+                    f"Downloading {fw}... {downloaded // 1024} KB"
                     + (f" / {total // 1024} KB" if total > 0 else ""),
                 )
 
             version = win.engine.setup_framework(on_progress=on_progress)
 
             GLib.idle_add(win._progress_start_pulse)
-            GLib.idle_add(win.status_label.set_text, "Extracting BepInEx...")
+            GLib.idle_add(win.status_label.set_text, f"Extracting {fw}...")
             win._se_version_cache.pop(win._game_slug or "", None)
             win._se_check_in_flight.discard(win._game_slug or "")
             GLib.idle_add(win._progress_done)
@@ -101,12 +103,12 @@ def do_setup_bepinex(win):
             GLib.idle_add(win._update_setup_btn)
             GLib.idle_add(win._refresh_all)
             GLib.idle_add(show_bepinex_launch_dialog, win)
-            GLib.idle_add(win._toast, f"BepInEx {version} installed successfully")
+            GLib.idle_add(win._toast, f"{fw} {version} installed successfully")
         except Exception as e:
-            logger.error("BepInEx install failed: %s", e, exc_info=True)
+            logger.error("%s install failed: %s", fw, e, exc_info=True)
             GLib.idle_add(win._progress_done)
             GLib.idle_add(win.status_label.set_text, "Ready")
-            GLib.idle_add(win._toast, f"BepInEx install failed: {e}")
+            GLib.idle_add(win._toast, f"{fw} install failed: {e}")
 
     threading.Thread(target=run, daemon=True).start()
 

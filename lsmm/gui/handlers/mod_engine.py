@@ -198,9 +198,7 @@ def refresh_mod_engine_tab(win):
     if getattr(win.engine, "has_framework_setup", False):
         from lsmm.core.installer import load_manifest
         fw = getattr(win.engine, "framework_name", "BepInEx")
-        fw_cfg = (win.engine.profile.get("smapi")
-                  or win.engine.profile.get("bepinex")
-                  or {})
+        fw_cfg = getattr(win.engine, "framework_config", {})
         win._engine_sub_label.set_text(f"{game_name} · {fw}")
         win._se_group.set_title(fw)
         installed = win.engine.is_framework_installed()
