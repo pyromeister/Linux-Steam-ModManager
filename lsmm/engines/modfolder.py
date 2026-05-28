@@ -397,11 +397,15 @@ class ModFolderEngine(BaseEngine):
                 if base_name in tracked_names or base_name in tracked_dirs:
                     continue
                 # Skip SMAPI-bundled internal mods (UniqueID starts with "SMAPI.")
+                # Key is "UniqueId" in SMAPI manifests (case-insensitive lookup)
                 manifest_path = d / "manifest.json"
                 if manifest_path.exists():
                     parsed = _parse_smapi_manifest(manifest_path)
-                    if parsed and parsed.get("UniqueID", "").startswith("SMAPI."):
-                        continue
+                    if parsed:
+                        uid = next((v for k, v in parsed.items()
+                                    if k.lower() == "uniqueid"), "")
+                        if str(uid).startswith("SMAPI."):
+                            continue
                 result.append({
                     "name": base_name,
                     "active": not is_disabled,
