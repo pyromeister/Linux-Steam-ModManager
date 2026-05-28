@@ -25,7 +25,7 @@ def do_check_updates(window, api_key: str):
             if entry.get("game") not in (None, game_slug):
                 continue
             nx = entry.get("nexus")
-            if not nx:
+            if not nx or not nx.get("game_domain"):
                 continue
             try:
                 latest = check_update(nx["game_domain"], nx["mod_id"], nx["file_id"], api_key)

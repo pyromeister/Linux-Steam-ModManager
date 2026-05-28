@@ -60,6 +60,7 @@ class ModManagerWindow(Adw.ApplicationWindow):
         self._pending_nxm: str | None = pending_nxm
         self._se_version_cache: dict = {}
         self._se_check_in_flight: set = set()
+        self._fw_update_available: set = set()
         self._tracked_cache: dict = {}
         self._tracked_fetch_in_flight: set = set()
         self._tracked_rows: list = []  # get_first_child() hits Adwaita internals on PreferencesGroup
@@ -863,22 +864,41 @@ class ModManagerWindow(Adw.ApplicationWindow):
         if getattr(self.engine, "has_framework_setup", False):
             installed = self.engine.is_framework_installed()
             fw = getattr(self.engine, "framework_name", "BepInEx")
-            self.setup_btn.set_label(f"{fw} ✓" if installed else f"Install {fw}")
-            self.setup_btn.set_tooltip_text(
-                f"{fw} is installed" if installed
-                else f"Download and install {fw} into the game folder"
-            )
+            slug = self._game_slug or ""
+            update_available = slug in self._fw_update_available
+            if not installed:
+                self.setup_btn.set_label(f"Install {fw}")
+                self.setup_btn.set_tooltip_text(f"Download and install {fw} into the game folder")
+            elif update_available:
+                self.setup_btn.set_label(f"Update {fw}")
+                self.setup_btn.set_tooltip_text(f"A newer version of {fw} is available — click to update")
+            else:
+                self.setup_btn.set_label(f"{fw} ✓")
+                self.setup_btn.set_tooltip_text(f"{fw} is installed")
         elif self.engine.has_script_extender:
             se = self.engine.profile.get("script_extender", {})
             se_name = se.get("name", "Script Extender")
             paths = getattr(self.engine, "paths", None)
             se_installed = bool(paths and paths.se_loader and paths.se_loader.exists())
+            can_auto_install = bool(se.get("github_repo"))
             self.setup_btn.set_label(f"{se_name} ✓" if se_installed else f"Install {se_name}")
-            self.setup_btn.set_tooltip_text(
-                f"{se_name} is installed — click to (re)create the Steam launch wrapper"
-                if se_installed else
-                f"Download and install {se_name} into the game folder"
-            )
+            if se_installed:
+                self.setup_btn.set_sensitive(True)
+                self.setup_btn.set_tooltip_text(
+                    f"{se_name} is installed — click to (re)create the Steam launch wrapper"
+                )
+            elif can_auto_install:
+                self.setup_btn.set_sensitive(True)
+                self.setup_btn.set_tooltip_text(
+                    f"Download and install {se_name} into the game folder"
+                )
+            else:
+                self.setup_btn.set_sensitive(True)
+                download_page = se.get("download_page")
+                self.setup_btn.set_tooltip_text(
+                    f"Open {se_name} download page" if download_page
+                    else f"{se_name} must be installed manually — click for instructions"
+                )
         else:
             self.setup_btn.set_label("Script Extender")
             self.setup_btn.set_sensitive(False)

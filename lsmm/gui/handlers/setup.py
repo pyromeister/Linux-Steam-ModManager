@@ -21,25 +21,37 @@ def handle_setup_btn(win):
 
 def handle_setup_bepinex(win):
     fw = getattr(win.engine, "framework_name", "BepInEx")
-    if win.engine.is_framework_installed():
+    slug = win._game_slug or ""
+    update_available = slug in win._fw_update_available
+
+    if win.engine.is_framework_installed() and not update_available:
         show_bepinex_launch_dialog(win)
         return
 
-    dialog = Adw.MessageDialog(
-        transient_for=win,
-        heading=f"Install {fw}",
-        body=(
+    if update_available:
+        heading = f"Update {fw}"
+        body = (
+            f"A newer version of {fw} is available. "
+            f"The latest release will be downloaded from GitHub "
+            f"and installed to:\n<tt>{GLib.markup_escape_text(str(win.engine.game_root))}</tt>"
+        )
+        action_label = "Download & Update"
+    else:
+        heading = f"Install {fw}"
+        body = (
             f"The latest {fw} release will be downloaded from GitHub "
             f"and extracted to:\n<tt>{GLib.markup_escape_text(str(win.engine.game_root))}</tt>\n\n"
             f"{fw} is required for mods to work in this game."
-        ),
-    )
+        )
+        action_label = "Download & Install"
+
+    dialog = Adw.MessageDialog(transient_for=win, heading=heading, body=body)
     dialog.set_body_use_markup(True)
     dialog.add_response("cancel", "Cancel")
-    dialog.add_response("install", "Download & Install")
-    dialog.set_response_appearance("install", Adw.ResponseAppearance.SUGGESTED)
-    dialog.set_default_response("install")
-    dialog.connect("response", lambda d, r: do_setup_bepinex(win) if r == "install" else None)
+    dialog.add_response("confirm", action_label)
+    dialog.set_response_appearance("confirm", Adw.ResponseAppearance.SUGGESTED)
+    dialog.set_default_response("confirm")
+    dialog.connect("response", lambda d, r: do_setup_bepinex(win) if r == "confirm" else None)
     dialog.present()
 
 
@@ -98,6 +110,7 @@ def do_setup_bepinex(win):
             GLib.idle_add(win.status_label.set_text, f"Extracting {fw}...")
             win._se_version_cache.pop(win._game_slug or "", None)
             win._se_check_in_flight.discard(win._game_slug or "")
+            win._fw_update_available.discard(win._game_slug or "")
             GLib.idle_add(win._progress_done)
             GLib.idle_add(win.status_label.set_text, "Ready")
             GLib.idle_add(win._update_setup_btn)
@@ -127,6 +140,20 @@ def handle_setup_se(win):
         _finish_se_setup(win)
         return
 
+    # No auto-install available — open download page if configured
+    if not se.get("github_repo"):
+        download_page = se.get("download_page")
+        if download_page:
+            import gi
+            gi.require_version("Gtk", "4.0")
+            from gi.repository import Gtk
+            Gtk.UriLauncher.new(download_page).launch(win, None, None, None)
+            win._toast(f"Opening {se_name} download page…")
+        else:
+            game_root = str(getattr(paths, "game_root", "the game folder"))
+            _show_manual_install_dialog(win, se_name, game_root)
+        return
+
     # SE not installed — fetch release info and show confirm dialog
     def fetch_and_confirm():
         GLib.idle_add(win.status_label.set_text, f"Fetching {se_name} release info…")
@@ -148,6 +175,20 @@ def handle_setup_se(win):
         GLib.idle_add(_show_se_confirm_dialog, win, se_name, version, url, dest)
 
     threading.Thread(target=fetch_and_confirm, daemon=True).start()
+
+
+def _show_manual_install_dialog(win, se_name: str, game_root: str):
+    body = (
+        f"{se_name} cannot be downloaded automatically.\n\n"
+        f"Download it manually from the official website, then extract the contents "
+        f"into:\n<tt>{GLib.markup_escape_text(game_root)}</tt>\n\n"
+        f"Once installed, click the button again to set up the Steam launch wrapper."
+    )
+    dialog = Adw.MessageDialog(transient_for=win, heading=f"Install {se_name} manually", body=body)
+    dialog.set_body_use_markup(True)
+    dialog.add_response("ok", "OK")
+    dialog.set_default_response("ok")
+    dialog.present()
 
 
 def _show_se_confirm_dialog(win, se_name, version, url, dest):

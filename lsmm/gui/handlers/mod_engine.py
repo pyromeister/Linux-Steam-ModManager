@@ -222,21 +222,29 @@ def refresh_mod_engine_tab(win):
                 def _fw_check(repo=github_repo, lbl=val_ref, s=slug, vp=ver_prefix):
                     latest = fetch_github_latest_tag(repo)
                     installed_raw = vp.lstrip("v") if vp != "Installed" else None
+                    update_avail = False
                     if latest:
                         if installed_raw and installed_raw == latest:
                             text = f"✓ {vp} — up to date"
                         elif installed_raw:
                             text = f"✓ {vp} — v{latest} available"
+                            update_avail = True
                         else:
                             text = f"✓ Installed — v{latest} available"
+                            update_avail = True
                     else:
                         text = f"✓ {vp}"
                     win._se_version_cache[s] = text
                     win._se_check_in_flight.discard(s)
+                    if update_avail:
+                        win._fw_update_available.add(s)
+                    else:
+                        win._fw_update_available.discard(s)
 
                     def _update(t=text, lbl=lbl, s=s):
                         if win._game_slug == s:
                             set_version_label(lbl, t)
+                            win._update_setup_btn()
                         return False
                     GLib.idle_add(_update)
                 threading.Thread(target=_fw_check, daemon=True).start()
@@ -322,11 +330,13 @@ def refresh_mod_engine_tab(win):
             bool(se_plugins),
         )
         launch_sh = (game_root / "se_launch.sh") if game_root else None
-        launch_ok = bool(launch_sh and launch_sh.exists())
-        set_se_row(
-            win._se_launch_row, win._se_launch_val,
-            "wrapper active ✓" if launch_ok else "not set up — run Setup below",
-        )
+        if launch_sh:
+            set_se_row(
+                win._se_launch_row, win._se_launch_val,
+                abbrev_path(launch_sh) + ("  ✓" if launch_sh.exists() else "  ✗ Not found — run Setup"),
+            )
+        else:
+            set_se_row(win._se_launch_row, win._se_launch_val, "not set up — run Setup below")
     else:
         win._engine_sub_label.set_text(f"{game_name} · Folder mods")
         win._se_group.set_title("No Script Extender")

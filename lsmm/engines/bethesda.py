@@ -95,6 +95,30 @@ class BethesdaEngine(BaseEngine):
             logger.info(f"Extracting {archive_path.name}...")
             extract(archive_path, tmp)
 
+            # SE archive: if the archive contains the SE loader, install to game_root
+            se_cfg = self.profile.get("script_extender", {})
+            se_loader_name = se_cfg.get("loader_exe")
+            se_root = self._find_se_root(tmp, se_loader_name) if se_loader_name else None
+            if se_root is not None:
+                archive_cache = cache_archive(archive_path, game_slug)
+                self.paths.game_root.mkdir(parents=True, exist_ok=True)
+                installed = []
+                for src in se_root.rglob("*"):
+                    if not src.is_file():
+                        continue
+                    rel = src.relative_to(se_root)
+                    dst = self.paths.game_root / rel
+                    dst.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(src, dst)
+                    installed.append(dst)
+                record_install(name, archive_path, installed, game_slug=game_slug,
+                               archive_cache=archive_cache, nexus_meta=nexus_meta)
+                if nexus_meta and nexus_meta.get("version") and game_slug:
+                    from lsmm.core.config import save_se_installed_version
+                    save_se_installed_version(game_slug, nexus_meta["version"].lstrip("v"))
+                logger.info(f"✓ Installed SE: {name}")
+                return
+
             if fomod_files is not None:
                 if not force:
                     conflicts = check_conflicts_fomod(fomod_files, self.paths.data_dir, load_manifest(), name)
@@ -139,9 +163,23 @@ class BethesdaEngine(BaseEngine):
                            nexus_meta=nexus_meta, staged=staging_used,
                            staging_path=staging_path)
 
+            # If this install provided the SE loader, persist the version for display
+            se_loader = getattr(self.paths, "se_loader", None)
+            if se_loader and se_loader.exists() and nexus_meta:
+                ver = nexus_meta.get("version", "")
+                if ver and game_slug:
+                    from lsmm.core.config import save_se_installed_version
+                    save_se_installed_version(game_slug, ver.lstrip("v"))
+
         logger.info(f"✓ Installed: {name}")
         if plugins_added:
             logger.info(f"  Plugins activated: {', '.join(plugins_added)}")
+
+    def _find_se_root(self, extracted: Path, loader_exe: str) -> Path | None:
+        """Return the directory containing loader_exe inside extracted archive, or None."""
+        for candidate in extracted.rglob(loader_exe):
+            return candidate.parent
+        return None
 
     # ── Uninstall ────────────────────────────────────────────────────────────
 

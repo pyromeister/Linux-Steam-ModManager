@@ -67,25 +67,42 @@ class ScriptExtenderManager:
                     return stem.replace("_", ".")
         return None
 
-    def get_latest_info(self) -> tuple[str, str, str] | None:
-        """Fetch latest GitHub release. Returns (version, download_url, filename) or None."""
+    def get_latest_info(self) -> tuple[str, str | None, str | None] | None:
+        """Fetch latest GitHub release. Returns (version, download_url, filename) or None.
+
+        When only `github_tags_repo` is configured (no binary assets), returns
+        (version, None, None) — version display only, no download possible.
+        """
         repo = self._se.get("github_repo")
         prefix = self._se.get("asset_prefix", "")
-        if not repo:
+        if repo:
+            try:
+                data = net.request(
+                    f"https://api.github.com/repos/{repo}/releases/latest",
+                    headers={"Accept": "application/vnd.github+json"},
+                )
+                release = json.loads(data)
+            except Exception:
+                return None
+            version = release.get("tag_name", "unknown")
+            for asset in release.get("assets", []):
+                name = asset["name"]
+                if name.startswith(prefix) and name.endswith((".7z", ".zip")):
+                    return version, asset["browser_download_url"], name
             return None
-        try:
-            data = net.request(
-                f"https://api.github.com/repos/{repo}/releases/latest",
-                headers={"Accept": "application/vnd.github+json"},
-            )
-            release = json.loads(data)
-        except Exception:
-            return None
-        version = release.get("tag_name", "unknown")
-        for asset in release.get("assets", []):
-            name = asset["name"]
-            if name.startswith(prefix) and name.endswith((".7z", ".zip")):
-                return version, asset["browser_download_url"], name
+
+        tags_repo = self._se.get("github_tags_repo")
+        if tags_repo:
+            try:
+                data = net.request(
+                    f"https://api.github.com/repos/{tags_repo}/tags?per_page=1",
+                    headers={"Accept": "application/vnd.github+json"},
+                )
+                tags = json.loads(data)
+                if tags:
+                    return tags[0]["name"], None, None
+            except Exception:
+                pass
         return None
 
     # ── Mutating ─────────────────────────────────────────────────────────────
