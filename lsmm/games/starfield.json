@@ -9,6 +9,8 @@
     "name": "SFSE",
     "loader_exe": "sfse_loader.exe",
     "plugins_dir": "Data/SFSE/Plugins",
-    "asset_prefix": "sfse_"
+    "asset_prefix": "sfse_",
+    "github_tags_repo": "ianpatt/sfse",
+    "download_page": "https://www.nexusmods.com/starfield/mods/106"
   }
 }

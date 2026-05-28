@@ -8,6 +8,7 @@
   "proton": true,
   "bepinex": {
     "plugins_dir": "BepInEx/plugins",
-    "build": "win_x64"
+    "build": "win_x64",
+    "github_repo": "BepInEx/BepInEx"
   }
 }
