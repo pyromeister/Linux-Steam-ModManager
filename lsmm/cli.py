@@ -15,14 +15,14 @@ Usage:
   lsmm games                                    (list available games)
 """
 
-import json
 import logging
 import sys
 import argparse
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-from lsmm.core.config import load_profile, GAMES_DIR, LOG_PATH
+from lsmm.core.config import load_profile, LOG_PATH
+from lsmm.core.utils import available_games
 from lsmm.engines import load_engine
 
 logger = logging.getLogger(__name__)
@@ -119,9 +119,8 @@ def cmd_check(engine, args):
 
 def cmd_games(_engine, _args):
     print("\n── Available Games ─────────────────────")
-    for p in sorted(GAMES_DIR.glob("*.json")):
-        data = json.loads(p.read_text())
-        print(f"  {p.stem:<20} {data['name']}")
+    for slug, name in available_games():
+        print(f"  {slug:<20} {name}")
     print()
 
 
