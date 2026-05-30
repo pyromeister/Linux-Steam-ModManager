@@ -21,15 +21,61 @@ finish-args:
   - --own-name=io.github.pyromeister.lsmm
 
 modules:
-  - name: p7zip
+  - name: unrar
     buildsystem: simple
     build-commands:
-      - make -j${FLATPAK_BUILDER_N_JOBS:-1} 7za
-      - install -Dm755 bin/7za /app/bin/7z
+      - make -j${FLATPAK_BUILDER_N_JOBS:-1}
+      - install -Dm755 unrar /app/bin/unrar
     sources:
       - type: archive
-        url: https://github.com/p7zip-project/p7zip/archive/refs/tags/v17.04.tar.gz
-        sha256: ea029a2e21d2d6ad0a156f6679bd66836204aa78148a4c5e498fe682e77127ef
+        url: https://www.rarlab.com/rar/unrarsrc-7.0.7.tar.gz
+        sha256: da95829c7e66fe461c06eb4bea8145e58d88d76909432d0875cd1ff86669f728
+
+  - name: python3-py7zr
+    buildsystem: simple
+    build-commands:
+      - pip3 install --no-build-isolation --no-deps --prefix=/app
+          backports_zstd-1.5.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
+          brotli-1.2.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
+          inflate64-1.0.4-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
+          multivolumefile-0.2.3-py3-none-any.whl
+          psutil-7.2.2-cp36-abi3-manylinux2010_x86_64.manylinux_2_12_x86_64.manylinux_2_28_x86_64.whl
+          pybcj-1.0.7-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
+          pycryptodomex-3.23.0-cp37-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+          pyppmd-1.3.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
+          texttable-1.7.0-py2.py3-none-any.whl
+          py7zr-1.1.0-py3-none-any.whl
+    sources:
+      - type: file
+        url: https://files.pythonhosted.org/packages/e4/4b/2cecd4d6679f175f28ae02022bd2050ff4023e38902fae104dbe2e231911/backports_zstd-1.5.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
+        sha256: bb73c22444617bc5a3abf32dd27b3f2085898cfe3b95e6855300e9189898a3bd
+      - type: file
+        url: https://files.pythonhosted.org/packages/03/a7/03aa61fbc3c5cbf99b44d158665f9b0dd3d8059be16c460208d9e385c837/brotli-1.2.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
+        sha256: 072e7624b1fc4d601036ab3f4f27942ef772887e876beff0301d261210bca97f
+      - type: file
+        url: https://files.pythonhosted.org/packages/37/00/1a2351a85d36b26c5b2b8cfbb37ad86084c98f592dd7590f8577d8b33993/inflate64-1.0.4-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
+        sha256: 62d1aac3aba094ae42e27ce7581b414c90f218248be0953b6aeb11a127225e5d
+      - type: file
+        url: https://files.pythonhosted.org/packages/22/31/ec5f46fd4c83185b806aa9c736e228cb780f13990a9cf4da0beb70025fcc/multivolumefile-0.2.3-py3-none-any.whl
+        sha256: 237f4353b60af1703087cf7725755a1f6fcaeeea48421e1896940cd1c920d678
+      - type: file
+        url: https://files.pythonhosted.org/packages/b5/70/5d8df3b09e25bce090399cf48e452d25c935ab72dad19406c77f4e828045/psutil-7.2.2-cp36-abi3-manylinux2010_x86_64.manylinux_2_12_x86_64.manylinux_2_28_x86_64.whl
+        sha256: 076a2d2f923fd4821644f5ba89f059523da90dc9014e85f8e45a5774ca5bc6f9
+      - type: file
+        url: https://files.pythonhosted.org/packages/a1/56/3008e748c7d35c407db97b77af52ade07756033250d0e208a6af231131ca/pybcj-1.0.7-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
+        sha256: 20b400c9f48faed01edb7f0df54b4354270325c886e785f31c866c581a46023b
+      - type: file
+        url: https://files.pythonhosted.org/packages/c8/a9/8862616a85cf450d2822dbd4fff1fcaba90877907a6ff5bc2672cafe42f8/pycryptodomex-3.23.0-cp37-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+        sha256: f489c4765093fb60e2edafdf223397bc716491b2b69fe74367b70d6999257a5c
+      - type: file
+        url: https://files.pythonhosted.org/packages/88/d7/fe32c2a4f8539365e6292aed25545830a5e718a510cdb4caddd6fd8d8056/pyppmd-1.3.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
+        sha256: 1bd6d179ad39b6191ca0cbe62fb9592f33f49277b4384ad7bc5eb0e6ca27ebee
+      - type: file
+        url: https://files.pythonhosted.org/packages/24/99/4772b8e00a136f3e01236de33b0efda31ee7077203ba5967fcc76da94d65/texttable-1.7.0-py2.py3-none-any.whl
+        sha256: 72227d592c82b3d7f672731ae73e4d1f88cd8e2ef5b075a7a7f01a23a3743917
+      - type: file
+        url: https://files.pythonhosted.org/packages/f0/9c/762284710ead9076eeecd55fb60509c19cd1f4bea811df5f3603725b44cb/py7zr-1.1.0-py3-none-any.whl
+        sha256: 5921bc30fb72b5453aafe3b2183664c08ef508cde2655988d5e9bd6078353ef7
 
   - name: lsmm
     buildsystem: simple

@@ -379,6 +379,7 @@ class BethesdaEngine(BaseEngine):
         if not self._se_manager:
             raise RuntimeError("No script extender configured for this game")
         self._se_manager.download(on_progress=on_progress)
+        self.ensure_ini()
 
     def uninstall_script_extender(self) -> None:
         if not self._se_manager:

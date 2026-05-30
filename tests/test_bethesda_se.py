@@ -64,12 +64,14 @@ def eng(tmp_path, monkeypatch):
     monkeypatch.setattr(installer, "_migration_done", True)
 
     engine = BethesdaEngine(_PROFILE_SE)
+    my_games = tmp_path / "users/steamuser/Documents/My Games/Starfield"
     engine.paths = SimpleNamespace(
         data_dir=data_dir,
         plugins_txt=plugins_txt,
         se_plugins_dir=None,
         game_root=tmp_path,
         se_loader=tmp_path / "sfse_loader.exe",
+        custom_ini=my_games / "StarfieldCustom.ini",
     )
     engine._se_manager._game_root = tmp_path
     return engine
@@ -167,6 +169,24 @@ def test_download_script_extender_extracts_zip(eng, tmp_path):
         eng.download_script_extender()
 
     assert (eng.paths.game_root / "sfse_loader.exe").exists()
+
+
+def test_download_script_extender_writes_custom_ini(eng, tmp_path):
+    release_zip = {
+        "tag_name": "0.2.38",
+        "assets": [{"name": "sfse_0_2_38.zip", "browser_download_url": "https://example.com/sfse.zip"}],
+    }
+
+    with patch("lsmm.core.net.request", return_value=json.dumps(release_zip).encode()), \
+         patch("lsmm.core.script_extender.download_file"), \
+         patch("lsmm.core.script_extender.extract"):
+        eng.download_script_extender()
+
+    ini = eng.paths.custom_ini
+    assert ini.exists()
+    content = ini.read_text()
+    assert "bInvalidateOlderFiles=1" in content
+    assert "sResourceDataDirsFinal=" in content
 
 
 def test_download_script_extender_raises_on_7z_failure(eng):

@@ -4,6 +4,7 @@ import json
 import zipfile
 from pathlib import Path
 
+import py7zr
 import pytest
 
 import io
@@ -108,6 +109,24 @@ class TestExtract:
 
         assert not (tmp_path / "escape.txt").exists()
         assert not (dest / "safe.txt").exists()
+
+    def test_7z_extraction(self, tmp_path):
+        archive = tmp_path / "mod.7z"
+        with py7zr.SevenZipFile(archive, mode='w') as z:
+            z.writestr(b"fake esp content", "Data/plugin.esp")
+            z.writestr(b"readme", "readme.txt")
+        dest = tmp_path / "extracted"
+        extract(archive, dest)
+        assert (dest / "Data" / "plugin.esp").exists()
+        assert (dest / "readme.txt").exists()
+
+    def test_7z_zstd_extraction(self, tmp_path):
+        archive = tmp_path / "mod_zstd.7z"
+        with py7zr.SevenZipFile(archive, mode='w', filters=[{"id": py7zr.FILTER_ZSTD}]) as z:
+            z.writestr(b"fake esp content", "Data/plugin.esp")
+        dest = tmp_path / "extracted"
+        extract(archive, dest)
+        assert (dest / "Data" / "plugin.esp").exists()
 
     def test_unsupported_format_raises(self, tmp_path):
         archive = tmp_path / "mod.tar.gz"

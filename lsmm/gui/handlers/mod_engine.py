@@ -4,6 +4,18 @@ import html
 import threading
 from pathlib import Path
 
+
+def _ver_tuple(v: str) -> tuple:
+    try:
+        return tuple(int(x) for x in v.split("."))
+    except (ValueError, AttributeError):
+        return (0,)
+
+
+def _update_needed(installed: str, latest: str) -> bool:
+    """True only when latest is strictly newer than installed."""
+    return _ver_tuple(latest) > _ver_tuple(installed)
+
 import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
@@ -224,11 +236,11 @@ def refresh_mod_engine_tab(win):
                     installed_raw = vp.lstrip("v") if vp != "Installed" else None
                     update_avail = False
                     if latest:
-                        if installed_raw and installed_raw == latest:
-                            text = f"✓ {vp} — up to date"
-                        elif installed_raw:
+                        if installed_raw and _update_needed(installed_raw, latest):
                             text = f"✓ {vp} — v{latest} available"
                             update_avail = True
+                        elif installed_raw:
+                            text = f"✓ {vp} — up to date"
                         else:
                             text = f"✓ Installed — v{latest} available"
                             update_avail = True
@@ -304,10 +316,10 @@ def refresh_mod_engine_tab(win):
                 if info:
                     latest = info[0].lstrip("v")
                     installed_raw = vp.lstrip("v") if vp != "Installed" else None
-                    if installed_raw and installed_raw == latest:
-                        text = f"✓ {vp} — up to date"
-                    elif installed_raw:
+                    if installed_raw and _update_needed(installed_raw, latest):
                         text = f"✓ {vp} — v{latest} available"
+                    elif installed_raw:
+                        text = f"✓ {vp} — up to date"
                     else:
                         text = f"✓ Installed — v{latest} available"
                 else:

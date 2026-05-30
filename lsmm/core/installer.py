@@ -14,6 +14,8 @@ import zipfile
 from contextlib import contextmanager
 from pathlib import Path
 
+import py7zr
+
 from lsmm.core.config import normalize_dir_name, ARCHIVES_DIR, BACKUPS_DIR, MANIFEST_PATH
 
 logger = logging.getLogger(__name__)
@@ -75,14 +77,20 @@ def extract(archive_path: Path, dest: Path) -> None:
     if suffix == ".zip":
         with zipfile.ZipFile(archive_path) as z:
             safe_extract_zip(z, dest)
-    elif suffix in (".7z", ".rar"):  # 7z strips leading / and .. by default; -snl prevents symlink attacks
+    elif suffix == ".7z":
+        with py7zr.SevenZipFile(archive_path, mode='r') as z:
+            names = z.getnames()
+            for name in names:
+                safe_archive_member_path(dest, name)
+            z.extractall(path=dest)
+    elif suffix == ".rar":
         result = subprocess.run(
-            ["7z", "x", str(archive_path), f"-o{dest}", "-y", "-snl"],
+            ["unrar", "x", "-y", str(archive_path), f"{dest}/"],
             capture_output=True,
         )
         if result.returncode != 0:
             raise RuntimeError(
-                f"7z extraction failed: {result.stderr.decode(errors='replace')}"
+                f"unrar extraction failed: {result.stderr.decode(errors='replace') or result.stdout.decode(errors='replace')}"
             )
     else:
         raise ValueError(f"Unsupported archive format: {suffix}")
