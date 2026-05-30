@@ -16,6 +16,7 @@ def _update_needed(installed: str, latest: str) -> bool:
     """True only when latest is strictly newer than installed."""
     return _ver_tuple(latest) > _ver_tuple(installed)
 
+
 import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")

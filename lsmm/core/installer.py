@@ -89,9 +89,8 @@ def extract(archive_path: Path, dest: Path) -> None:
             capture_output=True,
         )
         if result.returncode != 0:
-            raise RuntimeError(
-                f"unrar extraction failed: {result.stderr.decode(errors='replace') or result.stdout.decode(errors='replace')}"
-            )
+            err = result.stderr.decode(errors='replace') or result.stdout.decode(errors='replace')
+            raise RuntimeError(f"unrar extraction failed: {err}")
     else:
         raise ValueError(f"Unsupported archive format: {suffix}")
     logger.debug("Extraction complete: %s", archive_path.name)
