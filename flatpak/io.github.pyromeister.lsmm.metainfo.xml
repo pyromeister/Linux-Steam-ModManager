@@ -38,6 +38,13 @@
   </provides>
 
   <releases>
+    <release version="0.3.1-alpha" date="2026-05-30">
+      <description>
+        <p>Bug fixes: 7z ZSTD and RAR5 archive extraction (py7zr + unrar),
+        automatic Custom INI setup on SE install, semantic version comparison
+        for SE update badge, full paths in Mod Engine tab.</p>
+      </description>
+    </release>
     <release version="0.3.0-alpha" date="2026-05-15">
       <description>
         <p>UI overhaul, Flatpak fixes, system profiles (Vanilla / All Mods), NVSE
