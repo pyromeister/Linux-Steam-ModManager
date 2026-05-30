@@ -27,8 +27,7 @@ from lsmm.core.utils import load_engine as _load_engine
 
 
 def abbrev_path(path: Path) -> str:
-    parts = path.parts
-    return ("…/" + "/".join(parts[-3:])) if len(parts) > 3 else str(path)
+    return str(path)
 
 
 def set_row(row: Adw.ActionRow, text: str, visible: bool = True) -> None:
